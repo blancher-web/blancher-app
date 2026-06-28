@@ -241,6 +241,23 @@ textarea.form-input{resize:vertical;min-height:80px;}
 // ============================================================
 // FIREBASE INIT
 // ============================================================
+// ============================================================
+// SALON NAMESPACE（サロンデータ分離）
+// ============================================================
+// 各サロンが同じFirebaseを使っても完全にデータ分離する
+// blancher: namespace = '' (既存パスそのまま)
+// 新サロン: namespace = 'salons/[code]' (独自パス)
+(function(){
+  var savedNs = localStorage.getItem('salon_ns') || '';
+  window._salonNs = savedNs;
+  // データパス: blancher=='/data', 新サロン=='/salons/[code]/data'
+  window._dataPath = savedNs ? '/salons/'+savedNs : '/data';
+  window._chatsBasePath = savedNs ? '/salons/'+savedNs+'/chats' : '/chats';
+  window._reactionsBasePath = savedNs ? '/salons/'+savedNs+'/reactions' : '/reactions';
+  window._pinnedBasePath = savedNs ? '/salons/'+savedNs+'/pinned' : '/pinned';
+  window._chatReadBasePath = savedNs ? '/salons/'+savedNs+'/chatRead' : '/chatRead';
+})();
+
 (function(){
   var FB_CONFIG = {
     apiKey: "AIzaSyDb9cZcPfZTYdLbebwHG2vXAJvyr0TrACQ",
@@ -260,7 +277,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
     window._fbDB = firebase.database();
 
     // 全データのリアルタイムリスナー
-    window._fbDB.ref('/data').on('value', function(snap){
+    window._fbDB.ref(window._dataPath).on('value', function(snap){
       window._fbCache = snap.val() || {};
       window._fbReady = true;
       // STAFF_LISTをFirebaseから更新
@@ -275,7 +292,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
 
     // チャットのリアルタイムリスナー（ルーム別）
     ['all','A','B'].forEach(function(room){
-      window._fbDB.ref('/chats/'+room).limitToLast(200).on('value', function(snap){
+      window._fbDB.ref(window._chatsBasePath+'/'+room).limitToLast(200).on('value', function(snap){
         window._fbChats[room] = snap.val() || {};
         if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'chat'){
           var box = document.getElementById('chatBox');
@@ -285,7 +302,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
         }
       });
       // リアクションのリアルタイムリスナー
-      window._fbDB.ref('/reactions/'+room).on('value', function(snap){
+      window._fbDB.ref(window._reactionsBasePath+'/'+room).on('value', function(snap){
         window._fbReactions[room] = snap.val() || {};
         if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined'){
           if(S.page === 'chat' || (S.page === 'management' && S.mgmtTab==='chat')) render();
@@ -297,25 +314,25 @@ textarea.form-input{resize:vertical;min-height:80px;}
     window._fbPinned = {};
     window._fbChatRead = {};
     ['all','A','B','mgmt'].forEach(function(room){
-      window._fbDB.ref('/pinned/'+room).on('value', function(snap){
+      window._fbDB.ref(window._pinnedBasePath+'/'+room).on('value', function(snap){
         window._fbPinned[room] = snap.val() || null;
         if(typeof render==='function'&&window._appMounted&&typeof S!=='undefined'&&S.page==='chat') render();
       });
-      window._fbDB.ref('/chatRead/'+room).on('value', function(snap){
+      window._fbDB.ref(window._chatReadBasePath+'/'+room).on('value', function(snap){
         window._fbChatRead[room] = snap.val() || {};
       });
     });
 
     // マネジメント専用チャットのリアルタイムリスナー
     window._fbChats['mgmt'] = window._fbChats['mgmt'] || {};
-    window._fbDB.ref('/chats/mgmt').limitToLast(200).on('value', function(snap){
+    window._fbDB.ref(window._chatsBasePath+'/mgmt').limitToLast(200).on('value', function(snap){
       window._fbChats['mgmt'] = snap.val() || {};
       if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'management' && S.mgmtTab==='chat'){
         render();
       }
     });
     // マネジメントチャットのリアクションリスナー
-    window._fbDB.ref('/reactions/mgmt').on('value', function(snap){
+    window._fbDB.ref(window._reactionsBasePath+'/mgmt').on('value', function(snap){
       window._fbReactions['mgmt'] = snap.val() || {};
       if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'management' && S.mgmtTab==='chat'){
         render();
@@ -323,7 +340,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
     });
 
     // localStorage→Firebaseの初回マイグレーション
-    window._fbDB.ref('/data').once('value').then(function(snap){
+    window._fbDB.ref(window._dataPath).once('value').then(function(snap){
       if(snap.val()) return; // すでにデータあり
       var data = {};
       for(var i=0;i<localStorage.length;i++){
@@ -334,7 +351,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
         }
       }
       if(Object.keys(data).length > 0){
-        window._fbDB.ref('/data').set(data);
+        window._fbDB.ref(window._dataPath).set(data);
       }
       // チャットも移行
       ['all','A','B'].forEach(function(room){
@@ -342,7 +359,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
         if(!cd) return;
         try{
           var msgs = JSON.parse(cd)||[];
-          msgs.forEach(function(msg){ msg.ts = msg.ts||Date.now(); window._fbDB.ref('/chats/'+room).push(msg); });
+          msgs.forEach(function(msg){ msg.ts = msg.ts||Date.now(); window._fbDB.ref(window._chatsBasePath+'/'+room).push(msg); });
         }catch(e){}
       });
     });
@@ -622,7 +639,7 @@ const DB = {
   set: function(k,v){
     if(window._fbDB){
       window._fbCache[k] = v; // 即時反映（楽観的更新）
-      window._fbDB.ref('/data/'+k).set(v===null ? null : v);
+      window._fbDB.ref(window._dataPath+'/'+k).set(v===null ? null : v);
     } else {
       localStorage.setItem('salon_'+k, JSON.stringify(v));
     }
@@ -657,7 +674,7 @@ const DB = {
   addChat: function(room, msg){
     msg.ts = Date.now();
     if(window._fbDB){
-      window._fbDB.ref('/chats/'+room).push(msg);
+      window._fbDB.ref(window._chatsBasePath+'/'+room).push(msg);
     } else {
       try{
         var list = JSON.parse(localStorage.getItem('chat_'+room))||[];
@@ -2838,21 +2855,21 @@ function executeTestDataClear(){
   ['sales','customers','messages','absences','notices',
    'thanks','reports','repairs2','storeUsageReqs','attendance'].forEach(k=>{
     if(checked(k)){
-      updates['/data/'+k] = null;
+      updates[window._dataPath+'/'+k] = null;
       delete window._fbCache[k];
       localStorage.removeItem('salon_'+k);
     }
   });
   if(checked('checkdone')){
-    updates['/data/checkdone_A'] = null;
-    updates['/data/checkdone_B'] = null;
+    updates[window._dataPath+'/checkdone_A'] = null;
+    updates[window._dataPath+'/checkdone_B'] = null;
     delete window._fbCache['checkdone_A'];
     delete window._fbCache['checkdone_B'];
   }
   if(checked('chats')){
     ['all','A','B','mgmt'].forEach(room=>{
-      updates['/chats/'+room] = null;
-      updates['/reactions/'+room] = null;
+      updates[window._chatsBasePath+'/'+room] = null;
+      updates[window._reactionsBasePath+'/'+room] = null;
       window._fbChats[room] = {};
       window._fbReactions[room] = {};
       localStorage.removeItem('chat_'+room);
@@ -3228,13 +3245,16 @@ function renderDesigns(){
   const catFilter = S.designCat || '全て';
   const menuFilter = S.designMenuCat || '全て';
   const keyword = S.designKeyword || '';
+  const myStore = S.user?.store;
+  const storeFilter = S.designStore || (canSeeAll()?'all':myStore);
 
-  // フィルタリング
+  // フィルタリング（店舗フィルタ追加）
   const filtered = designs.filter(d => {
     const matchCat = catFilter === '全て' || d.cat === catFilter;
     const matchMenu = menuFilter === '全て' || d.menuCat === menuFilter;
     const matchKey = !keyword || d.title.includes(keyword) || (d.body||'').includes(keyword) || (d.tags||'').includes(keyword);
-    return matchCat && matchMenu && matchKey;
+    const matchStore = storeFilter==='all' || !d.store || d.store==='both' || d.store===storeFilter;
+    return matchCat && matchMenu && matchKey && matchStore;
   });
 
   return`<div class="page">
@@ -3243,6 +3263,13 @@ function renderDesigns(){
       <button class="tab ${mainTab==='gallery'?'active':''}" onclick="S.designMainTab='gallery';render()">💅 デザイン</button>
       ${isDesignAdmin()?`<button class="tab ${mainTab==='schedule'?'active':''}" onclick="S.designMainTab='schedule';render()">📅 スケジュール</button>`:''}
     </div>
+    <!-- 店舗フィルタ -->
+    ${canSeeAll()?`<div class="tab-row" style="margin-bottom:10px">
+      <button class="tab ${storeFilter==='all'?'active':''}" onclick="S.designStore='all';render()">🌐 全店</button>
+      <button class="tab ${storeFilter==='A'?'active':''}" onclick="S.designStore='A';render()">浦和店</button>
+      <button class="tab ${storeFilter==='B'?'active':''}" onclick="S.designStore='B';render()">広尾店</button>
+      <button class="tab ${storeFilter==='both'?'active':''}" onclick="S.designStore='both';render()">共通</button>
+    </div>`:''}
 
     <!-- 検索バー -->
     <div style="position:relative;margin-bottom:12px">
@@ -3291,7 +3318,8 @@ function renderDesigns(){
           <div style="display:flex;gap:4px;flex-wrap:wrap">
             <span class="badge badge-pink" style="font-size:10px">${d.cat}</span>
             ${d.menuCat?`<span class="badge badge-blue" style="font-size:10px">${d.menuCat}</span>`:''}
-            ${!isOwner()?`<span class="badge ${sColor}" style="font-size:10px">${sIcon}</span>`:''}
+            ${d.store&&d.store!=='both'?`<span class="badge ${d.store==='A'?'store-a':'store-b'}" style="font-size:9px">${d.store==='A'?'浦和':'広尾'}</span>`:''}
+            ${!isOwner()&&d.progress&&S.user?.id in (d.progress||{})?`<span class="badge ${sColor}" style="font-size:10px">${sIcon}</span>`:''}
           </div>
           ${d.tags?`<div style="font-size:10px;color:var(--mid);margin-top:4px">#${d.tags.split(',').join(' #')}</div>`:''}
         </div>`;
@@ -3314,11 +3342,16 @@ function openDesign(id){
   </div>`:'';
   const ownerProgressHtml=isOwner()&&d.progress?`<div style="margin:14px 0">
     <div style="font-size:13px;font-weight:600;color:var(--mid);margin-bottom:8px">👥 スタッフ習得状況</div>
-    ${STAFF_LIST.filter(s=>s.treat).map(s=>{
-      const st=d.progress[s.id]||'未確認';
-      const c=st==='習得済み'?'badge-green':st==='練習中'?'badge-warn':'badge-gray';
-      return`<div class="att-item"><span class="fw-bold">${s.name}</span><span class="badge ${c}">${st==='習得済み'?'✅':st==='練習中'?'🔄':'📖'} ${st}</span></div>`;
-    }).join('')}
+    ${(()=>{
+      const targets = d.targetStaffIds
+        ? STAFF_LIST.filter(s=>d.targetStaffIds.includes(s.id))
+        : STAFF_LIST.filter(s=>s.treat);
+      return targets.map(s=>{
+        const st=d.progress?d.progress[s.id]||'未確認':'未確認';
+        const c=st==='習得済み'?'badge-green':st==='練習中'?'badge-warn':'badge-gray';
+        return`<div class="att-item"><span class="fw-bold">${s.name}</span><span class="badge ${c}">${st==='習得済み'?'✅':st==='練習中'?'🔄':'📖'} ${st}</span></div>`;
+      }).join('');
+    })()}
   </div>`:'';
   showModal(`
     <div class="flex gap-8 mb-8" style="flex-wrap:wrap"><span class="badge badge-pink">${d.cat}</span>${d.menuCat?`<span class="badge badge-blue">${d.menuCat}</span>`:''}</div>${d.tags?`<div style="font-size:12px;color:var(--mid);margin-bottom:8px">#${d.tags.split(',').join(' #')}</div>`:''}
@@ -3334,6 +3367,8 @@ function openDesign(id){
 }
 
 function showAddDesignModal(){
+  const myStore = canSeeAll() ? (S.designStore==='all'?'both':S.designStore||'both') : (S.user?.store||'A');
+  const treatStaff = STAFF_LIST.filter(s=>s.treat);
   showModal(`<div class="modal-title">💅 デザインを投稿</div>
     <div class="form-group"><label class="form-label">タイトル</label><input class="form-input" id="d_title" placeholder="例：春のニュアンスネイル"></div>
     <div class="form-group"><label class="form-label">🗂️ スタイル</label>
@@ -3341,6 +3376,22 @@ function showAddDesignModal(){
     </div>
     <div class="form-group"><label class="form-label">💅 メニュー</label>
       <select class="form-input" id="d_menucat"><option value="">選択しない</option>${DESIGN_MENU_CATS.map(c=>`<option>${c}</option>`).join('')}</select>
+    </div>
+    <div class="form-group"><label class="form-label">🏪 対象店舗</label>
+      <select class="form-input" id="d_store">
+        <option value="A" ${myStore==='A'?'selected':''}>浦和店のみ</option>
+        <option value="B" ${myStore==='B'?'selected':''}>広尾店のみ</option>
+        <option value="both" ${myStore==='both'?'selected':''}>両店共通</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">👥 確認が必要なスタッフ（任意・未選択=全員）</label>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;background:#f8f8f8;border-radius:10px">
+        ${treatStaff.map(s=>`<label style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 8px;background:#fff;border-radius:8px;border:1px solid var(--border)">
+          <input type="checkbox" id="d_staff_${s.id}" value="${s.id}">
+          <span style="font-size:13px">${s.name}</span>
+        </label>`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--mid);margin-top:4px">※ 未選択の場合は全スタッフが対象</div>
     </div>
     <div class="form-group"><label class="form-label">🏷️ タグ（任意・カンマ区切り）</label><input class="form-input" id="d_tags" placeholder="例：ピンク,春,インスタ"></div>
     <div class="form-group">
@@ -3390,15 +3441,27 @@ function saveDesign(){
   const cat=document.getElementById('d_cat').value;
   const menuCat=document.getElementById('d_menucat').value;
   const tags=document.getElementById('d_tags').value.trim();
-  // ファイルアップロード優先、なければURL
+  const store=document.getElementById('d_store')?.value||'both';
   const imageUrl = window._designImgData || document.getElementById('d_img').value.trim();
   const bodyEl=document.getElementById('d_body');
   const body=(bodyEl?bodyEl.value.trim():'')||'（コメントなし）';
   if(!title) return alert('タイトルを入力してください');
+
+  // 確認スタッフの指定（チェックされたスタッフのみ、未選択なら全員）
+  const treatStaff = STAFF_LIST.filter(s=>s.treat);
+  const checkedStaff = treatStaff.filter(s=>document.getElementById('d_staff_'+s.id)?.checked);
+  const targetStaff = checkedStaff.length>0 ? checkedStaff : treatStaff;
+
   const progress={};
-  STAFF_LIST.filter(s=>s.treat).forEach(s=>progress[s.id]='未確認');
+  targetStaff.forEach(s=>progress[s.id]='未確認');
+
   const list=DB.getDesigns();
-  list.unshift({id:genId(),title,cat,menuCat,tags,imageUrl,body,date:today(),author:S.user.name,authorId:S.user.id,progress});
+  list.unshift({
+    id:genId(),title,cat,menuCat,tags,imageUrl,body,store,
+    date:today(),author:S.user.name,authorId:S.user.id,
+    progress,
+    targetStaffIds: targetStaff.map(s=>s.id) // 確認対象スタッフID
+  });
   DB.set('designs',list);
   window._designImgData = null;
   closeModal();render();
@@ -6156,12 +6219,12 @@ function setReply(room, fbKey, senderName, encodedText){
 
 function pinMessage(room, fbKey, encodedText){
   if(!window._fbDB) return;
-  window._fbDB.ref('/pinned/'+room).set({fbKey, text: decodeURIComponent(encodedText), pinnedBy: S.user?.name, pinnedAt: Date.now()});
+  window._fbDB.ref(window._pinnedBasePath+'/'+room).set({fbKey, text: decodeURIComponent(encodedText), pinnedBy: S.user?.name, pinnedAt: Date.now()});
 }
 
 function unpinMessage(room){
   if(!window._fbDB) return;
-  window._fbDB.ref('/pinned/'+room).set(null);
+  window._fbDB.ref(window._pinnedBasePath+'/'+room).set(null);
 }
 
 function scrollToPinned(fbKey){
@@ -6370,7 +6433,7 @@ function toggleReaction(room, fbKey, emoji){
   if(!fbKey || !window._fbDB) return;
   const userId = S.user?.id;
   if(!userId) return;
-  const ref = window._fbDB.ref('/reactions/'+room+'/'+fbKey+'/'+userId);
+  const ref = window._fbDB.ref(window._reactionsBasePath+'/'+room+'/'+fbKey+'/'+userId);
   const current = ((window._fbReactions[room]||{})[fbKey]||{})[userId];
   if(current === emoji){
     ref.remove(); // 同じリアクションは取り消し
@@ -6429,7 +6492,7 @@ function deleteChatMsg(room, fbKey){
   if(!fbKey){ alert('削除できません'); return; }
   if(!confirm('このメッセージを削除しますか？')) return;
   if(window._fbDB){
-    window._fbDB.ref('/chats/'+room+'/'+fbKey).remove();
+    window._fbDB.ref(window._chatsBasePath+'/'+room+'/'+fbKey).remove();
   } else {
     // localStorageフォールバック
     try{
@@ -7795,6 +7858,17 @@ function completeSetup(){
     storeCount: data.storeCount,
     setupAt: new Date().toISOString()
   };
+  // 名前空間を生成（新サロン用のデータ分離）
+  if(!localStorage.getItem('salon_ns')){
+    const ns = Math.random().toString(36).slice(2,10);
+    localStorage.setItem('salon_ns', ns);
+    window._salonNs = ns;
+    window._dataPath = '/salons/'+ns;
+    window._chatsBasePath = '/salons/'+ns+'/chats';
+    window._reactionsBasePath = '/salons/'+ns+'/reactions';
+    window._pinnedBasePath = '/salons/'+ns+'/pinned';
+    window._chatReadBasePath = '/salons/'+ns+'/chatRead';
+  }
   saveAppConfig(cfg);
   // スタッフ設定を保存
   if(staff.length>0) saveStaffConfig(staff);
