@@ -2422,35 +2422,94 @@ function confirmNoticeRead(id){
 }
 
 
-function showAddNoticeModal(){
-  showModal(`<div class="modal-title">📢 お知らせを追加</div>
-    <div class="form-group"><label class="form-label">タイトル</label><input class="form-input" id="m_ntitle" placeholder="タイトルを入力"></div>
-    <div class="form-group"><label class="form-label">内容</label><textarea class="form-input" id="m_nbody" rows="5" placeholder="内容を入力"></textarea></div>
-    <div class="form-group"><label class="form-label">📅 期限（任意）</label><input type="date" class="form-input" id="m_ndeadline"></div>
+function showAddNoticeModal(editId){
+  const editing = editId ? DB.getNotices().find(n=>n.id===editId) : null;
+  showModal(`<div class="modal-title">${editing?'✏️ お知らせを編集':'📢 お知らせを追加'}</div>
+    <div class="form-group"><label class="form-label">タイトル</label>
+      <input class="form-input" id="m_ntitle" placeholder="タイトルを入力" value="${editing?editing.title:''}"></div>
+    <div class="form-group"><label class="form-label">内容</label>
+      <textarea class="form-input" id="m_nbody" rows="5" placeholder="内容を入力">${editing?editing.body:''}</textarea></div>
+    <div class="form-group"><label class="form-label">📷 画像（任意）</label>
+      <label style="display:flex;align-items:center;gap:10px;background:var(--bg);border:1.5px dashed var(--border);border-radius:10px;padding:12px;cursor:pointer">
+        <span style="font-size:24px">📷</span>
+        <div>
+          <div style="font-size:13px;font-weight:600">画像を添付する</div>
+          <div style="font-size:11px;color:var(--mid)">JPG・PNG・GIF対応</div>
+        </div>
+        <input type="file" accept="image/*" id="m_nimg" style="display:none" onchange="previewNoticeImg(this)">
+      </label>
+      <div id="m_nimg_preview" style="margin-top:8px;${editing&&editing.imageData?'':'display:none'}">
+        ${editing&&editing.imageData?`<div style="position:relative;display:inline-block"><img src="${editing.imageData}" style="max-width:100%;max-height:180px;border-radius:10px;display:block"><button onclick="clearNoticeImg()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px">×</button></div>`:''}
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">📅 期限（任意）</label>
+      <input type="date" class="form-input" id="m_ndeadline" value="${editing&&editing.deadline?editing.deadline:''}"></div>
     <div class="form-group"><label class="form-label">対象店舗</label>
       <select class="form-input" id="m_nstore">
-        <option value="both">両店</option><option value="A">浦和店</option><option value="B">広尾店</option>
+        <option value="both" ${!editing||editing.store==='both'?'selected':''}>両店</option>
+        <option value="A" ${editing&&editing.store==='A'?'selected':''}>浦和店</option>
+        <option value="B" ${editing&&editing.store==='B'?'selected':''}>広尾店</option>
       </select></div>
     <div class="form-group" style="display:flex;align-items:center;gap:10px">
-      <input type="checkbox" id="m_nimp" style="width:20px;height:20px">
+      <input type="checkbox" id="m_nimp" style="width:20px;height:20px" ${editing&&editing.important?'checked':''}>
       <label for="m_nimp" class="form-label" style="margin:0">🔴 重要なお知らせ</label>
     </div>
-    <button class="btn btn-primary btn-block" onclick="saveNotice()">投稿する</button>`);
+    <button class="btn btn-primary btn-block" onclick="saveNotice('${editId||''}')">💾 ${editing?'更新する':'投稿する'}</button>`);
+  // 既存画像をwindow変数に保持
+  window._noticeImgData = editing&&editing.imageData ? editing.imageData : null;
 }
 
-function saveNotice(){
-  const title=document.getElementById('m_ntitle').value.trim();
-  const body=document.getElementById('m_nbody').value.trim();
-  const deadline=document.getElementById('m_ndeadline').value;
-  const store=document.getElementById('m_nstore').value;
-  const important=document.getElementById('m_nimp').checked;
+function previewNoticeImg(input){
+  if(!input.files||!input.files[0]) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e){
+    window._noticeImgData = e.target.result;
+    const prev = document.getElementById('m_nimg_preview');
+    if(prev){
+      prev.style.display = 'block';
+      prev.innerHTML = '<div style="position:relative;display:inline-block">'
+        +'<img src="'+e.target.result+'" style="max-width:100%;max-height:180px;border-radius:10px;display:block">'
+        +'<button onclick="clearNoticeImg()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:14px">×</button>'
+        +'</div>';
+    }
+  };
+  reader.readAsDataURL(file);
+}
+function clearNoticeImg(){
+  window._noticeImgData = null;
+  const prev = document.getElementById('m_nimg_preview');
+  if(prev){ prev.style.display='none'; prev.innerHTML=''; }
+  const inp = document.getElementById('m_nimg');
+  if(inp) inp.value='';
+}
+
+function saveNotice(editId){
+  const title = document.getElementById('m_ntitle').value.trim();
+  const body  = document.getElementById('m_nbody').value.trim();
+  const deadline = document.getElementById('m_ndeadline').value;
+  const store = document.getElementById('m_nstore').value;
+  const important = document.getElementById('m_nimp').checked;
+  const imageData = window._noticeImgData || null;
   if(!title||!body) return alert('タイトルと内容を入力してください');
-  const list=DB.getNotices();
-  const staffInStore=STAFF_LIST.filter(s=>s.treat&&(store==='both'||s.store===store||s.store==='both'));
-  const progress={};
-  staffInStore.forEach(s=>progress[s.id]='未対応');
-  list.unshift({id:genId(),title,body,store,important,deadline,date:today(),author:S.user.name,readBy:[S.user.id],progress});
-  DB.set('notices',list);
+
+  const list = DB.getNotices();
+  if(editId){
+    // 編集
+    const idx = list.findIndex(n=>n.id===editId);
+    if(idx>=0){
+      list[idx] = Object.assign({}, list[idx], {title, body, store, important, deadline, imageData, editedAt: today()});
+      DB.set('notices', list);
+    }
+  } else {
+    // 新規
+    const staffInStore = STAFF_LIST.filter(s=>s.treat&&(store==='both'||s.store===store||s.store==='both'));
+    const progress = {};
+    staffInStore.forEach(s=>progress[s.id]='未対応');
+    list.unshift({id:genId(), title, body, store, important, deadline, imageData, date:today(), author:S.user.name, readBy:[S.user.id], progress});
+    DB.set('notices', list);
+  }
+  window._noticeImgData = null;
   closeModal();
   render();
 }
@@ -2492,15 +2551,20 @@ function openNotice(id){
     <div class="flex gap-8 mb-12" style="flex-wrap:wrap">
       ${n.important?'<span class="badge badge-danger">🔴 重要</span>':''}
       <span class="badge ${n.store==='both'?'badge-pink':'badge-blue'}">${getStoreLabel(n.store)}</span>
+      ${n.editedAt?'<span class="badge badge-gray" style="font-size:10px">✏️ 編集済</span>':''}
     </div>
     <div class="modal-title">${n.title}</div>
     <div style="font-size:13px;color:var(--mid);margin-bottom:8px">${fmtDateFull(n.date)} · ${n.author}</div>
     ${deadlineHtml}
     <div style="font-size:15px;line-height:1.9;white-space:pre-wrap;background:var(--bg);padding:14px;border-radius:var(--rs);margin-bottom:8px">${n.body}</div>
+    ${n.imageData?`<div style="margin-bottom:12px"><img src="${n.imageData}" style="max-width:100%;border-radius:10px;display:block;cursor:pointer" onclick="showImgModal(this)" data-src="${n.imageData}"></div>`:''}
     ${progressHtml}
     ${ownerProgressHtml}
-    <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      ${isOwner()||isTaskAdmin()?`<button class="btn btn-danger btn-sm" onclick="deleteNotice('${n.id}')">🗑 削除</button>`:'<div></div>'}
+    <div style="margin-top:16px;display:grid;grid-template-columns:${isOwner()||isTaskAdmin()?'1fr 1fr 1fr':'1fr'};gap:8px">
+      ${isOwner()||isTaskAdmin()?`
+        <button class="btn btn-outline btn-sm" onclick="closeModal();showAddNoticeModal('${n.id}')">✏️ 編集</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteNotice('${n.id}')">🗑 削除</button>
+      `:''}
       <button class="btn btn-outline btn-sm" onclick="closeModal()">閉じる</button>
     </div>`);
 }
@@ -8574,53 +8638,93 @@ function renderSpaceChat(){
   if(!space) return`<div class="page"><div class="empty-state"><div class="empty-icon">🗂️</div><div class="empty-text">スペースが見つかりません</div></div></div>`;
 
   const room = spaceId;
+  const spaceTab = S.spaceTab||'chat';
   const allMsgs = DB.getChats(room);
-  const msgs = allMsgs.slice(-100);
   const showEmoji = window._showEmojiPanel===room;
   const EMOJI_LIST = ['😊','😂','🥰','😍','🤔','😅','🙏','👏','💪','🎉','✨','💅','🌸','💕','😭','🔥','💯','👍','❤️','😘','🤗','😎','🥳','💖','🌈'];
   const userIcons = DB.getUserIcons();
 
   let h = '<div style="padding:0;display:flex;flex-direction:column;height:100vh">';
-  h += '<div style="padding:8px 14px;background:#fff;border-bottom:1px solid #eee;flex-shrink:0">';
-  h += '<div style="font-size:20px;display:inline">'+(space.icon||'💬')+'</div>';
-  h += '<span style="font-weight:700;margin-left:6px">'+space.name+'</span>';
-  if(space.desc) h += '<div style="font-size:12px;color:var(--mid)">'+space.desc+'</div>';
-  h += '</div>';
 
-  h += '<div id="spaceChatBox" style="flex:1;overflow-y:auto;padding:12px;background:#f8f5ff">';
-  if(!msgs.length) h += '<div style="text-align:center;color:#aaa;font-size:13px;padding-top:40px">まだメッセージがありません</div>';
-  msgs.forEach(function(m){
-    const isMe = m.senderId===S.user?.id;
-    const icon = userIcons[m.senderId]||getRank(DB.getPoints()[m.senderId]||0).char;
-    const fbKey = m._fbKey||'';
-    h += '<div style="display:flex;flex-direction:'+(isMe?'row-reverse':'row')+';align-items:flex-end;gap:6px;margin-bottom:8px">';
-    if(!isMe){
-      h += '<div style="font-size:22px;flex-shrink:0;cursor:pointer" data-uid="'+m.senderId+'" data-uname="'+encodeURIComponent(m.senderName||'')+'" data-fbkey="'+fbKey+'" data-room="mgmt" data-text="'+encodeURIComponent((m.text||'').slice(0,50))+'" data-nodm="0" onclick="showUserActionFromEl(this)">'+icon+'</div>';
-    } else {
-      h += '<div style="font-size:22px;flex-shrink:0">'+icon+'</div>';
-    }
-    h += '<div style="max-width:78%">';
-    if(!isMe) h += '<div style="font-size:11px;color:#888;margin-bottom:2px;cursor:pointer;font-weight:600" data-uid="'+m.senderId+'" data-uname="'+encodeURIComponent(m.senderName||'')+'" data-fbkey="'+fbKey+'" data-room="mgmt" data-text="'+encodeURIComponent((m.text||'').slice(0,50))+'" data-nodm="0" onclick="showUserActionFromEl(this)">'+m.senderName+'</div>';
-    if(m.type==='image') h += '<img src="'+m.imageUrl+'" style="max-width:220px;max-height:220px;border-radius:12px;display:block;cursor:pointer" data-src="'+m.imageUrl+'" onclick="showImgModal(this)">';
-    else if(m.type==='video') h += '<video src="'+m.videoUrl+'" style="max-width:240px;border-radius:12px" controls></video>';
-    else h += '<div style="padding:10px 14px;border-radius:'+(isMe?'18px 4px 18px 18px':'4px 18px 18px 18px')+';background:'+(isMe?'#7c4dff':'#fff')+';color:'+(isMe?'#fff':'#333')+';font-size:14px;line-height:1.5;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.1)">'+m.text+'</div>';
-    h += '<div style="font-size:10px;color:#bbb;margin-top:2px;'+(isMe?'text-align:right':'')+' ">'+m.time+'</div>';
-    h += '</div></div>';
-  });
-  h += '</div>';
-
-  if(showEmoji){
-    h += '<div style="padding:8px;background:#fff;border-top:1px solid #eee;display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;flex-shrink:0">';
-    EMOJI_LIST.forEach(function(e,i){ h += '<button data-eidx="'+i+'" onclick="insertEmojiToSpace(this)" style="background:none;border:none;cursor:pointer;font-size:22px;padding:4px">'+e+'</button>'; });
-    h += '</div>';
-  }
-  h += '<div style="padding:8px 10px;background:#fff;border-top:1px solid #eee;flex-shrink:0">';
-  h += '<div style="display:flex;gap:6px;align-items:center">';
-  h += '<button data-eroom="'+room+'" onclick="toggleEmojiPanel(this)" style="width:38px;height:38px;border-radius:50%;background:#ede7f6;border:none;cursor:pointer;font-size:20px;flex-shrink:0">😊</button>';
-  h += '<label style="width:38px;height:38px;border-radius:50%;background:#ede7f6;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📷<input type="file" accept="image/*,video/*" style="display:none" data-room="'+room+'" onchange="sendMediaBtn(this)"></label>';
-  h += '<input id="spaceChatInput" placeholder="メッセージを入力..." style="flex:1;padding:10px 14px;border:1.5px solid #c5b8f5;border-radius:22px;font-size:14px;outline:none;font-family:inherit">';
-  h += '<button data-sroom="'+room+'" onclick="sendSpaceChatBtn(this)" style="width:44px;height:44px;border-radius:50%;background:#7c4dff;border:none;color:#fff;font-size:22px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">↑</button>';
+  // ヘッダー
+  h += '<div style="padding:8px 14px 0;background:#fff;border-bottom:1px solid #eee;flex-shrink:0">';
+  h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">';
+  h += '<div style="font-size:20px">'+(space.icon||'💬')+'</div>';
+  h += '<div style="flex:1"><div style="font-weight:700">'+space.name+'</div>';
+  if(space.desc) h += '<div style="font-size:11px;color:var(--mid)">'+space.desc+'</div>';
   h += '</div></div>';
+  // タブ
+  h += '<div style="display:flex;gap:0">';
+  h += '<button onclick="S.spaceTab=\'chat\';render()" style="flex:1;padding:8px;border:none;border-bottom:2px solid '+(spaceTab==='chat'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:13px;font-weight:'+(spaceTab==='chat'?'700':'400')+';color:'+(spaceTab==='chat'?'#7c4dff':'#999')+'">💬 チャット</button>';
+  h += '<button onclick="S.spaceTab=\'photos\';render()" style="flex:1;padding:8px;border:none;border-bottom:2px solid '+(spaceTab==='photos'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:13px;font-weight:'+(spaceTab==='photos'?'700':'400')+';color:'+(spaceTab==='photos'?'#7c4dff':'#999')+'">📸 写真</button>';
+  h += '</div></div>';
+
+  if(spaceTab==='photos'){
+    // 写真フォルダ
+    const photos = allMsgs.filter(function(m){ return m.type==='image'&&m.imageUrl; });
+    h += '<div style="flex:1;overflow-y:auto;padding:12px;background:#f8f5ff">';
+    if(!photos.length){
+      h += '<div style="text-align:center;color:#aaa;padding:40px 16px">';
+      h += '<div style="font-size:48px;margin-bottom:12px">📷</div>';
+      h += '<div style="font-size:14px">まだ写真がありません</div>';
+      h += '<div style="font-size:12px;margin-top:4px">チャットで送った写真がここに表示されます</div>';
+      h += '</div>';
+    } else {
+      h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px">';
+      photos.slice().reverse().forEach(function(m){
+        h += '<div style="position:relative;padding-top:100%;background:#eee;border-radius:4px;overflow:hidden;cursor:pointer" onclick="showImgModal(this.querySelector(\'img\'))">';
+        h += '<img src="'+m.imageUrl+'" data-src="'+m.imageUrl+'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">';
+        h += '<div style="position:absolute;bottom:0;left:0;right:0;padding:4px;background:linear-gradient(transparent,rgba(0,0,0,.5));font-size:9px;color:#fff">'+m.time+'</div>';
+        h += '</div>';
+      });
+      h += '</div>';
+      h += '<div style="text-align:center;font-size:11px;color:#aaa;margin-top:12px">'+photos.length+'枚の写真</div>';
+    }
+    h += '</div>';
+    // 写真追加ボタン
+    h += '<div style="padding:10px;background:#fff;border-top:1px solid #eee;flex-shrink:0">';
+    h += '<label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#7c4dff;color:#fff;border-radius:12px;padding:12px;cursor:pointer;font-weight:600">';
+    h += '📷 写真を追加する';
+    h += '<input type="file" accept="image/*" style="display:none" data-room="'+room+'" onchange="sendMediaBtn(this)">';
+    h += '</label></div>';
+  } else {
+    // チャット
+    const msgs = allMsgs.slice(-100);
+    h += '<div id="spaceChatBox" style="flex:1;overflow-y:auto;padding:12px;background:#f8f5ff">';
+    if(!msgs.length) h += '<div style="text-align:center;color:#aaa;font-size:13px;padding-top:40px">まだメッセージがありません</div>';
+    msgs.forEach(function(m){
+      const isMe = m.senderId===S.user?.id;
+      const icon = userIcons[m.senderId]||getRank(DB.getPoints()[m.senderId]||0).char;
+      const fbKey = m._fbKey||'';
+      h += '<div style="display:flex;flex-direction:'+(isMe?'row-reverse':'row')+';align-items:flex-end;gap:6px;margin-bottom:8px">';
+      if(!isMe){
+        h += '<div style="font-size:22px;flex-shrink:0;cursor:pointer" data-uid="'+m.senderId+'" data-uname="'+encodeURIComponent(m.senderName||'')+'" data-fbkey="'+fbKey+'" data-room="'+room+'" data-text="'+encodeURIComponent((m.text||'').slice(0,50))+'" data-nodm="0" onclick="showUserActionFromEl(this)">'+icon+'</div>';
+      } else {
+        h += '<div style="font-size:22px;flex-shrink:0">'+icon+'</div>';
+      }
+      h += '<div style="max-width:78%">';
+      if(!isMe) h += '<div style="font-size:11px;color:#888;margin-bottom:2px;cursor:pointer;font-weight:600" data-uid="'+m.senderId+'" data-uname="'+encodeURIComponent(m.senderName||'')+'" data-fbkey="'+fbKey+'" data-room="'+room+'" data-text="'+encodeURIComponent((m.text||'').slice(0,50))+'" data-nodm="0" onclick="showUserActionFromEl(this)">'+m.senderName+'</div>';
+      if(m.type==='image') h += '<img src="'+m.imageUrl+'" style="max-width:220px;max-height:220px;border-radius:12px;display:block;cursor:pointer" data-src="'+m.imageUrl+'" onclick="showImgModal(this)">';
+      else if(m.type==='video') h += '<video src="'+m.videoUrl+'" style="max-width:240px;border-radius:12px" controls></video>';
+      else h += '<div style="padding:10px 14px;border-radius:'+(isMe?'18px 4px 18px 18px':'4px 18px 18px 18px')+';background:'+(isMe?'#7c4dff':'#fff')+';color:'+(isMe?'#fff':'#333')+';font-size:14px;line-height:1.5;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.1)">'+m.text+'</div>';
+      h += '<div style="font-size:10px;color:#bbb;margin-top:2px;'+(isMe?'text-align:right':'')+' ">'+m.time+'</div>';
+      h += '</div></div>';
+    });
+    h += '</div>';
+
+    if(showEmoji){
+      h += '<div style="padding:8px;background:#fff;border-top:1px solid #eee;display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;flex-shrink:0">';
+      EMOJI_LIST.forEach(function(e,i){ h += '<button data-eidx="'+i+'" onclick="insertEmojiToSpace(this)" style="background:none;border:none;cursor:pointer;font-size:22px;padding:4px">'+e+'</button>'; });
+      h += '</div>';
+    }
+    h += '<div style="padding:8px 10px;background:#fff;border-top:1px solid #eee;flex-shrink:0">';
+    h += '<div style="display:flex;gap:6px;align-items:center">';
+    h += '<button data-eroom="'+room+'" onclick="toggleEmojiPanel(this)" style="width:38px;height:38px;border-radius:50%;background:#ede7f6;border:none;cursor:pointer;font-size:20px;flex-shrink:0">😊</button>';
+    h += '<label style="width:38px;height:38px;border-radius:50%;background:#ede7f6;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📷<input type="file" accept="image/*,video/*" style="display:none" data-room="'+room+'" onchange="sendMediaBtn(this)"></label>';
+    h += '<input id="spaceChatInput" placeholder="メッセージを入力..." style="flex:1;padding:10px 14px;border:1.5px solid #c5b8f5;border-radius:22px;font-size:14px;outline:none;font-family:inherit">';
+    h += '<button data-sroom="'+room+'" onclick="sendSpaceChatBtn(this)" style="width:44px;height:44px;border-radius:50%;background:#7c4dff;border:none;color:#fff;font-size:22px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">↑</button>';
+    h += '</div></div>';
+  }
   h += '</div>';
 
   setTimeout(function(){ var b=document.getElementById('spaceChatBox'); if(b) b.scrollTop=b.scrollHeight; },80);
