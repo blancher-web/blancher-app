@@ -1246,6 +1246,38 @@ function renderHome(){
       <div style="font-size:22px;font-weight:800;color:var(--pink-d);margin-top:4px">おはようございます！${S.user.name}さん</div>
     </div>
 
+    <!-- オーナー クイックアクセス -->
+    ${isOwner()?`
+    <div style="background:linear-gradient(135deg,#f3e5f5,#ede7f6);border-radius:14px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:#7c4dff;margin-bottom:10px">⚡ クイックアクセス</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div onclick="go('shiftCreate')" style="background:#fff;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+          <div style="font-size:22px">📊</div><div style="font-size:10px;font-weight:600;margin-top:2px;color:#333">シフト作成</div>
+        </div>
+        <div onclick="go('shiftInput')" style="background:#fff;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+          <div style="font-size:22px">📅</div><div style="font-size:10px;font-weight:600;margin-top:2px;color:#333">シフト入力</div>
+        </div>
+        <div onclick="go('staff')" style="background:#fff;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+          <div style="font-size:22px">👤</div><div style="font-size:10px;font-weight:600;margin-top:2px;color:#333">スタッフ</div>
+        </div>
+        <div onclick="go('settings')" style="background:#fff;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+          <div style="font-size:22px">⚙️</div><div style="font-size:10px;font-weight:600;margin-top:2px;color:#333">設定</div>
+        </div>
+        <div onclick="go('customers')" style="background:#fff;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+          <div style="font-size:22px">👥</div><div style="font-size:10px;font-weight:600;margin-top:2px;color:#333">顧客管理</div>
+        </div>
+        <div onclick="go('progress')" style="background:#fff;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+          <div style="font-size:22px">📋</div><div style="font-size:10px;font-weight:600;margin-top:2px;color:#333">進捗管理</div>
+        </div>
+        <div onclick="go('management')" style="background:#fff;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+          <div style="font-size:22px">👔</div><div style="font-size:10px;font-weight:600;margin-top:2px;color:#333">マネジメント</div>
+        </div>
+        <div onclick="go('occAnalysis')" style="background:#fff;border-radius:10px;padding:10px 4px;text-align:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.08)">
+          <div style="font-size:22px">📈</div><div style="font-size:10px;font-weight:600;margin-top:2px;color:#333">稼働分析</div>
+        </div>
+      </div>
+    </div>`:''}
+
     <!-- 🔔 通知センター -->
     ${totalNotif>0||myPendingTasks.length>0?`
     <div style="background:linear-gradient(135deg,#FFF3E0,#FFF8E1);border:2px solid var(--warn);border-radius:14px;padding:14px 16px;margin-bottom:14px">
