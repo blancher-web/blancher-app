@@ -543,9 +543,11 @@ function saveAppConfig(cfg){
   if(window._fbDB) window._fbDB.ref('/data/appConfig').set(cfg);
 }
 function saveStaffConfig(list){
-  localStorage.setItem('salon_staffConfig', JSON.stringify(list));
-  if(window._fbDB) window._fbDB.ref('/data/staffConfig').set(list);
-  STAFF_LIST = list;
+  // 保存前にshoko/harukaを必ず含め、roleを正しく固定する
+  var safe = ensureAdmins(normalizeStaff(list));
+  localStorage.setItem('salon_staffConfig', JSON.stringify(safe));
+  if(window._fbDB) window._fbDB.ref('/data/staffConfig').set(safe);
+  STAFF_LIST = safe;
 }
 function isFirstRun(){
   return !getAppConfig();
@@ -1048,17 +1050,18 @@ function renderLogin(){
 }
 
 function doLogin(staffId){
-  const user = STAFF_LIST.find(s=>s.id===staffId);
+  let user = STAFF_LIST.find(s=>s.id===staffId);
+  if(!user) return;
+  // ログイン時にもroleを必ず正しく設定
+  if(FIXED_ROLES[staffId]) user = Object.assign({}, user, {role: FIXED_ROLES[staffId]});
   const pins = DB.getPins();
   const userPin = pins[staffId];
   if(userPin){
-    // PINが設定されている場合は認証画面へ
     S.pendingUser = user;
     S.pinInput = '';
     S.page = 'pin';
     render();
   } else {
-    // PINなし → そのままログイン
     S.user = user;
     S.store = user.store==='both' ? 'A' : user.store;
     S.viewStore = user.store==='both' ? 'A' : user.store;
@@ -1068,9 +1071,11 @@ function doLogin(staffId){
 
 function confirmPin(){
   const pins = DB.getPins();
-  const user = S.pendingUser;
+  let user = S.pendingUser;
   if(!user) return;
   if(S.pinInput === pins[user.id]){
+    // PIN確認後もroleを必ず正しく設定
+    if(FIXED_ROLES[user.id]) user = Object.assign({}, user, {role: FIXED_ROLES[user.id]});
     S.user = user;
     S.store = user.store==='both' ? 'A' : user.store;
     S.viewStore = user.store==='both' ? 'A' : user.store;
