@@ -3345,6 +3345,87 @@ function setUserIcon(emoji){
   render();
 }
 
+// ナビメニューカスタマイザー
+function showMenuCustomizer(){
+  const cfg = getNavConfig()||{};
+  const role = 'owner';
+  const current = cfg[role] || ALL_MENU_ITEMS.map(function(m){return m.page;});
+  window._menuCustOrder = current.slice();
+  renderMenuCustModal();
+}
+
+function renderMenuCustModal(){
+  const order = window._menuCustOrder||[];
+  const allPages = ALL_MENU_ITEMS.map(function(m){return m.page;});
+  // orderにないページ（追加可能）
+  const available = ALL_MENU_ITEMS.filter(function(m){ return !order.includes(m.page); });
+
+  let html = '<div class="modal-title">🔧 メニューを編集</div>';
+  html += '<div style="font-size:12px;color:var(--mid);margin-bottom:12px">表示する項目を選んで並び替えできます</div>';
+
+  html += '<div style="font-size:12px;font-weight:700;color:var(--pink);margin-bottom:6px">✅ 表示中（タップで削除・↑↓で並び替え）</div>';
+  html += '<div id="menuCustList" style="margin-bottom:12px">';
+  order.forEach(function(page, idx){
+    const item = ALL_MENU_ITEMS.find(function(m){return m.page===page;});
+    if(!item) return;
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px;background:#f8f8f8;border-radius:8px;margin-bottom:4px">';
+    html += '<span style="font-size:18px">'+item.icon+'</span>';
+    html += '<span style="flex:1;font-size:13px;font-weight:600">'+item.label+'</span>';
+    html += '<button onclick="menuCustUp('+idx+')" style="background:none;border:1px solid #ddd;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px" '+(idx===0?'disabled':'')+'>↑</button>';
+    html += '<button onclick="menuCustDown('+idx+')" style="background:none;border:1px solid #ddd;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px" '+(idx===order.length-1?'disabled':'')+'>↓</button>';
+    html += '<button onclick="menuCustRemove(\''+page+'\')" style="background:none;border:1px solid var(--danger);border-radius:6px;padding:2px 8px;cursor:pointer;font-size:12px;color:var(--danger)">×</button>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  if(available.length>0){
+    html += '<div style="font-size:12px;font-weight:700;color:var(--mid);margin-bottom:6px">＋ 追加できる項目</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">';
+    available.forEach(function(item){
+      html += '<button onclick="menuCustAdd(\''+item.page+'\')" style="padding:6px 10px;border-radius:8px;border:1.5px dashed var(--border);background:#fff;cursor:pointer;font-size:12px">'+item.icon+' '+item.label+'</button>';
+    });
+    html += '</div>';
+  }
+
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
+  html += '<button class="btn btn-ghost btn-sm" onclick="menuCustReset()">🔄 デフォルトに戻す</button>';
+  html += '<button class="btn btn-primary btn-sm" onclick="menuCustSave()">💾 保存する</button>';
+  html += '</div>';
+
+  showModal(html);
+}
+
+function menuCustUp(idx){
+  if(idx<=0) return;
+  var a=window._menuCustOrder[idx-1]; window._menuCustOrder[idx-1]=window._menuCustOrder[idx]; window._menuCustOrder[idx]=a;
+  renderMenuCustModal();
+}
+function menuCustDown(idx){
+  if(idx>=window._menuCustOrder.length-1) return;
+  var a=window._menuCustOrder[idx+1]; window._menuCustOrder[idx+1]=window._menuCustOrder[idx]; window._menuCustOrder[idx]=a;
+  renderMenuCustModal();
+}
+function menuCustRemove(page){
+  window._menuCustOrder = window._menuCustOrder.filter(function(p){return p!==page;});
+  renderMenuCustModal();
+}
+function menuCustAdd(page){
+  if(!window._menuCustOrder.includes(page)) window._menuCustOrder.push(page);
+  renderMenuCustModal();
+}
+function menuCustReset(){
+  window._menuCustOrder = ALL_MENU_ITEMS.map(function(m){return m.page;});
+  renderMenuCustModal();
+}
+function menuCustSave(){
+  const cfg = getNavConfig()||{};
+  cfg.owner = window._menuCustOrder.slice();
+  saveNavConfig(cfg);
+  closeModal();
+  render();
+  alert('✅ メニューを保存しました！');
+}
+
 function showMenuManager(){
   const menus = loadMenus();
   const editCat = S.menuEditCat !== undefined ? S.menuEditCat : null;
@@ -3565,50 +3646,77 @@ function clearAllData(){
 // ============================================================
 // MORE MENU
 // ============================================================
+// 全メニューマスター（追加・削除・並び替えの元データ）
+const ALL_MENU_ITEMS = [
+  {icon:'📢',label:'連絡事項',page:'notices',ownerOnly:false},
+  {icon:'🚨',label:'問題報告',page:'reports',ownerOnly:false},
+  {icon:'💅',label:'お直し管理',page:'repairs',ownerOnly:false},
+  {icon:'🏪',label:'店舗利用申請',page:'storeUsage',ownerOnly:false},
+  {icon:'🏥',label:'欠勤・遅刻',page:'absences',ownerOnly:false},
+  {icon:'📊',label:'稼働分析',page:'occAnalysis',ownerOnly:true},
+  {icon:'📊',label:'進捗管理',page:'progress',ownerOnly:true},
+  {icon:'🏆',label:'表彰制度',page:'awards',ownerOnly:false},
+  {icon:'🎮',label:'ポイント',page:'points',ownerOnly:false},
+  {icon:'🙏',label:'ありがとう',page:'thanks',ownerOnly:false},
+  {icon:'📆',label:'月次タスク',page:'monthly',ownerOnly:false},
+  {icon:'🔧',label:'トラブル',page:'trouble',ownerOnly:false},
+  {icon:'📦',label:'在庫管理',page:'inventory',ownerOnly:false},
+  {icon:'📋',label:'マニュアル',page:'manuals',ownerOnly:false},
+  {icon:'📅',label:'シフト希望',page:'shift',ownerOnly:false},
+  {icon:'🗓️',label:'自分のシフト',page:'myShift',ownerOnly:false},
+  {icon:'📊',label:'シフト作成',page:'shiftCreate',ownerOnly:true},
+  {icon:'📅',label:'シフト入力',page:'shiftInput',ownerOnly:true},
+  {icon:'👤',label:'スタッフ管理',page:'staff',ownerOnly:true},
+  {icon:'👥',label:'顧客管理',page:'customers',ownerOnly:true},
+  {icon:'👔',label:'マネジメント',page:'management',ownerOnly:false},
+  {icon:'⚙️',label:'設定',page:'settings',ownerOnly:true},
+];
+
+function getNavConfig(){
+  try{
+    const fb = window._fbCache&&window._fbCache['navConfig'];
+    if(fb) return fb;
+    const loc = localStorage.getItem('salon_navConfig');
+    if(loc) return JSON.parse(loc);
+  }catch(e){}
+  return null;
+}
+function saveNavConfig(cfg){
+  localStorage.setItem('salon_navConfig', JSON.stringify(cfg));
+  if(window._fbDB) window._fbDB.ref(window._dataPath+'/navConfig').set(cfg);
+}
+
 function renderMore(){
-  const ownerItems=[
-    {icon:'📢',label:'連絡事項',page:'notices'},
-    {icon:'🚨',label:'問題報告',page:'reports'},
-    {icon:'💅',label:'お直し管理',page:'repairs'},
-    {icon:'🏪',label:'店舗利用申請',page:'storeUsage'},
-    {icon:'🏥',label:'欠勤・遅刻',page:'absences'},
-    {icon:'📊',label:'稼働分析',page:'occAnalysis'},
-    {icon:'📊',label:'進捗管理',page:'progress'},
-    {icon:'🏆',label:'表彰制度',page:'awards'},
-    {icon:'🎮',label:'ポイント',page:'points'},
-    {icon:'🙏',label:'ありがとう',page:'thanks'},
-    {icon:'📆',label:'月次タスク',page:'monthly'},
-    {icon:'🔧',label:'トラブル',page:'trouble'},
-    {icon:'📦',label:'在庫管理',page:'inventory'},
-    {icon:'📋',label:'マニュアル',page:'manuals'},
-    {icon:'📅',label:'シフト希望',page:'shift'},
-    {icon:'📊',label:'シフト作成',page:'shiftCreate'},
-    {icon:'📅',label:'シフト入力',page:'shiftInput'},
-    {icon:'👤',label:'スタッフ管理',page:'staff'},
-    {icon:'👥',label:'顧客管理',page:'customers'},
-    {icon:'👔',label:'マネジメント',page:'management'},
-    {icon:'⚙️',label:'設定',page:'settings'},
-  ];
-  const staffItems=[
-    {icon:'📢',label:'連絡事項',page:'notices'},
-    {icon:'🚨',label:'問題報告',page:'reports'},
-    {icon:'💅',label:'お直し管理',page:'repairs'},
-    {icon:'🏪',label:'店舗利用申請',page:'storeUsage'},
-    {icon:'🏥',label:'欠勤・遅刻連絡',page:'absences'},
-    {icon:'🎮',label:'ポイント',page:'points'},
-    {icon:'🙏',label:'ありがとう',page:'thanks'},
-    {icon:'📆',label:'月次タスク',page:'monthly'},
-    {icon:'🔧',label:'トラブル',page:'trouble'},
-    {icon:'📦',label:'在庫管理',page:'inventory'},
-    {icon:'📋',label:'マニュアル',page:'manuals'},
-    {icon:'📅',label:'シフト希望',page:'shift'},
-    {icon:'🗓️',label:'自分のシフト',page:'myShift'},
-  ].concat((isOwner()||S.user?.id==='misa'||S.user?.id==='wakana')?[{icon:'👔',label:'マネジメント',page:'management'}]:[])
-   .concat(isShiftAdmin()?[{icon:'📊',label:'シフト作成',page:'shiftCreate'},{icon:'📅',label:'シフト入力',page:'shiftInput'}]:[])
-   .concat(isTaskAdmin()&&!isShiftAdmin()?[{icon:'📊',label:'シフト参考',page:'occAnalysis'}]:[])
-   .concat(S.user&&S.user.store!=='B'?[{icon:'🏆',label:'表彰制度',page:'awards'}]:[]);
-  const items=isOwner()?ownerItems:staffItems;
+  const cfg = getNavConfig();
+
+  let items;
+  if(isOwner()){
+    if(cfg && cfg.owner){
+      // カスタム設定あり
+      items = cfg.owner
+        .map(function(page){ return ALL_MENU_ITEMS.find(function(m){ return m.page===page; }); })
+        .filter(Boolean);
+    } else {
+      items = ALL_MENU_ITEMS.filter(function(m){ return true; });
+    }
+  } else {
+    const base = ALL_MENU_ITEMS.filter(function(m){ return !m.ownerOnly; });
+    const extra = [];
+    if(isOwner()||S.user?.id==='misa'||S.user?.id==='wakana') extra.push(ALL_MENU_ITEMS.find(function(m){return m.page==='management';}));
+    if(isShiftAdmin()){ extra.push(ALL_MENU_ITEMS.find(function(m){return m.page==='shiftCreate';})); extra.push(ALL_MENU_ITEMS.find(function(m){return m.page==='shiftInput';})); }
+    if(cfg && cfg.staff){
+      items = cfg.staff
+        .map(function(page){ return ALL_MENU_ITEMS.find(function(m){ return m.page===page; }); })
+        .filter(Boolean);
+    } else {
+      items = base.concat(extra.filter(Boolean));
+    }
+  }
+
   return`<div class="page">
+    ${isOwner()?`<div style="text-align:right;margin-bottom:8px">
+      <button onclick="showMenuCustomizer()" style="background:none;border:1px solid var(--border);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--mid);cursor:pointer">🔧 メニューを編集</button>
+    </div>`:''}
     <div class="more-grid">
       ${items.map(i=>`<div class="more-item" onclick="go('${i.page}')">
         <div class="more-icon">${i.icon}</div>
@@ -3621,7 +3729,7 @@ function renderMore(){
         <span class="text-mid">${S.user.name}（${S.user.title}）</span>
       </div>
       <div style="margin-top:10px">
-        <button class="btn btn-ghost btn-sm btn-block" onclick="S.user=null;S.page='login';S._loginStore=null;render()">🚪 ログアウト</button>
+        <button class="btn btn-ghost btn-sm btn-block" onclick="doLogout()">🚪 ログアウト</button>
       </div>
     </div>
   </div>`;
