@@ -507,12 +507,22 @@ function normalizeStaff(list){
     return result;
   });
 }
+function ensureAdmins(list){
+  // shokoとharukaは必ずSTAFF_LISTに存在させる
+  var admins = DEFAULT_STAFF_LIST.filter(function(s){ return FIXED_ROLES[s.id]; });
+  admins.forEach(function(def){
+    if(!list.find(function(s){ return s.id===def.id; })){
+      list = [def].concat(list);
+    }
+  });
+  return list;
+}
 function loadStaffList(){
   try{
     const saved = window._fbCache && window._fbCache['staffConfig'];
-    if(saved && Array.isArray(saved) && saved.length > 0) return normalizeStaff(saved);
+    if(saved && Array.isArray(saved) && saved.length > 0) return ensureAdmins(normalizeStaff(saved));
     const local = localStorage.getItem('salon_staffConfig');
-    if(local){const p=JSON.parse(local); if(Array.isArray(p)&&p.length>0) return normalizeStaff(p);}
+    if(local){const p=JSON.parse(local); if(Array.isArray(p)&&p.length>0) return ensureAdmins(normalizeStaff(p));}
   }catch(e){}
   return DEFAULT_STAFF_LIST;
 }
