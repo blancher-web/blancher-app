@@ -3247,17 +3247,30 @@ function savePin(staffId){
 function exportData(){
   const keys = ['sales','customers','notices','messages','designs','designSchedules',
     'manuals','checklist','attendance','shiftRequests','absences','awards',
-    'inventory','stocktaking','settings','pins','checkdone_A','checkdone_B'];
+    'inventory','stocktaking','settings','pins','checkdone_A','checkdone_B',
+    'staffConfig','menuConfig','appConfig','userIcons','points','chatSpaces',
+    'storeUsageReqs','monthlyTasks','monthlyDone','repairs','reports','troubles'];
+
   const data = {
-    version: '1.0',
+    version: '2.0',
     exportedAt: nowDateTime(),
     exportedBy: S.user?.name||'',
-    data: {}
+    salonNs: window._salonNs||'',
+    localStorage: {},
+    firebase: {}
   };
+
+  // localStorageから
   keys.forEach(k=>{
     const val = localStorage.getItem('salon_'+k);
-    if(val) data.data[k] = val;
+    if(val) data.localStorage[k] = val;
   });
+
+  // Firebaseから（キャッシュ済みデータ）
+  if(window._fbCache){
+    data.firebase = JSON.parse(JSON.stringify(window._fbCache));
+  }
+
   const json = JSON.stringify(data, null, 2);
   const blob = new Blob([json], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -3265,12 +3278,12 @@ function exportData(){
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
   a.href = url;
-  a.download = `blancher_backup_${dateStr}.json`;
+  a.download = `cura_backup_${dateStr}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  alert('✅ バックアップファイルをダウンロードしました！\n安全な場所に保存してください。');
+  alert('✅ バックアップ完了！\n「cura_backup_'+dateStr+'.json」を安全な場所に保存してください。\n\nFirebase・localStorageの全データを含んでいます。');
 }
 
 function importData(input){
