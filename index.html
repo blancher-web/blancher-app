@@ -981,12 +981,20 @@ function renderHeader(title){
        </select>`
     : `<span class="store-badge ${storeClass(user.store)}">${getStoreLabel(user.store)}</span>`;
   return `<div class="header">
-    <div>
+    <div style="flex:1">
       <div class="header-title">${title}</div>
       <div class="header-sub">${user.name} / ${user.title}</div>
     </div>
     ${storeLabel}
+    <button onclick="doLogout()" style="background:none;border:1.5px solid #ddd;border-radius:20px;padding:4px 10px;font-size:11px;color:#999;cursor:pointer;margin-left:6px;white-space:nowrap">🚪 退出</button>
   </div>`;
+}
+
+function doLogout(){
+  if(confirm('ログアウトしますか？')){
+    S.user=null; S.page='login'; S._loginStore=null;
+    render();
+  }
 }
 
 function renderHeaderBack(title){
@@ -1244,6 +1252,7 @@ function renderHome(){
     <div style="text-align:center;margin-bottom:16px">
       <div style="font-size:13px;color:var(--mid)">${dateStr}</div>
       <div style="font-size:22px;font-weight:800;color:var(--pink-d);margin-top:4px">おはようございます！${S.user.name}さん</div>
+      <div style="font-size:11px;color:#aaa;margin-top:2px">ログイン中: ${S.user.name}（${S.user.role||'不明'}）/ ID: ${S.user.id}</div>
     </div>
 
     <!-- オーナー クイックアクセス -->
