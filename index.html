@@ -2529,6 +2529,12 @@ function saveNotice(editId){
     staffInStore.forEach(s=>progress[s.id]='未対応');
     list.unshift({id:genId(), title, body, store, important, deadline, imageData, date:today(), author:S.user.name, readBy:[S.user.id], progress});
     DB.set('notices', list);
+    // LINE通知
+    const storeLabel = store==='both'?'全店':store==='A'?'浦和店':'広尾店';
+    sendLineNotification(
+      `${important?'🔴【重要】':'📢'}${title}\n投稿者: ${S.user.name}（${storeLabel}）\n${body.slice(0,100)}${body.length>100?'...':''}`,
+      'ln_notice'
+    );
   }
   window._noticeImgData = null;
   closeModal();
@@ -3167,6 +3173,51 @@ function renderSettings(){
       </div>`:''}
       <button class="btn btn-danger btn-sm btn-block" onclick="if(confirm('全データを削除しますか？この操作は取り消せません。')){clearAllData()}">🗑 全データをリセット（完全削除）</button>
     </div>
+    ${isOwner()?`<div class="card" style="border:2px solid #06C755">
+      <div class="fw-bold mb-12" style="color:#06C755">💬 LINE通知設定</div>
+      <div style="font-size:12px;color:var(--mid);margin-bottom:12px">連絡事項・メッセージをLINEに自動通知します</div>
+      <div class="form-group">
+        <label class="form-label">Cloudflare Worker URL</label>
+        <input class="form-input" id="line_worker_url" value="${DB.getSettings().lineWorkerUrl||''}" placeholder="https://xxx.workers.dev">
+      </div>
+      <div class="form-group">
+        <label class="form-label">LINEチャンネルアクセストークン</label>
+        <input class="form-input" id="line_token" type="password" value="${DB.getSettings().lineToken||''}" placeholder="チャンネルアクセストークン">
+      </div>
+      <div class="form-group">
+        <label class="form-label">通知先 LINE グループID または ユーザーID</label>
+        <input class="form-input" id="line_group_id" value="${DB.getSettings().lineGroupId||''}" placeholder="C... または U...">
+        <div style="font-size:11px;color:var(--mid);margin-top:4px">グループIDはLINEのWebhookで取得できます</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">通知するイベント</label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${[
+            {id:'ln_notice',label:'📢 連絡事項の投稿'},
+            {id:'ln_message',label:'📩 メッセージ・タスク'},
+            {id:'ln_shift',label:'📅 シフト確定・通知'},
+            {id:'ln_absence',label:'🏥 欠勤・遅刻連絡'},
+          ].map(ev=>{
+            const cfg=DB.getSettings();
+            const checked=(cfg.lineEvents||{})[ev.id]!==false;
+            return`<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="${ev.id}" ${checked?'checked':''} style="width:18px;height:18px">
+              <span style="font-size:13px">${ev.label}</span>
+            </label>`;
+          }).join('')}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="testLineNotification()">🔔 テスト送信</button>
+        <button class="btn btn-primary btn-sm" onclick="saveLineSettings()" style="background:#06C755;border-color:#06C755">💾 保存</button>
+      </div>
+      <div style="margin-top:10px;padding:10px;background:#f0fff4;border-radius:8px;font-size:11px;color:#2d6a4f">
+        📖 <strong>設定手順：</strong><br>
+        1. LINE公式アカウント作成 → linebiz.com<br>
+        2. Cloudflare Workersにコードをデプロイ<br>
+        3. 上記の情報を入力して保存
+      </div>
+    </div>`:''}
     ${isOwner()?`<div class="card" style="border:2px solid #FF9800">
       <div class="fw-bold mb-12">💅 売上メニュー管理</div>
       <div style="font-size:13px;color:var(--mid);margin-bottom:12px">メニュー名の変更・追加・削除ができます</div>
@@ -3519,6 +3570,42 @@ function saveStaffTargets(){
   DB.setStaffTargets(targets);
   alert('✅ スタッフ別目標を保存しました！');
   render();
+}
+
+function saveLineSettings(){
+  const workerUrl = document.getElementById('line_worker_url')?.value.trim()||'';
+  const token = document.getElementById('line_token')?.value.trim()||'';
+  const groupId = document.getElementById('line_group_id')?.value.trim()||'';
+  const events = {};
+  ['ln_notice','ln_message','ln_shift','ln_absence'].forEach(id=>{
+    events[id] = document.getElementById(id)?.checked||false;
+  });
+  const cfg = DB.getSettings();
+  DB.set('settings', Object.assign({}, cfg, {lineWorkerUrl:workerUrl, lineToken:token, lineGroupId:groupId, lineEvents:events}));
+  alert('✅ LINE設定を保存しました！');
+}
+
+function testLineNotification(){
+  sendLineNotification('🔔 Curaからのテスト通知です！\n設定が正常に完了しました。');
+}
+
+async function sendLineNotification(message, eventId){
+  const cfg = DB.getSettings();
+  const workerUrl = cfg.lineWorkerUrl;
+  const token = cfg.lineToken;
+  const to = cfg.lineGroupId;
+  const events = cfg.lineEvents||{};
+  if(!workerUrl||!token||!to) return;
+  if(eventId && events[eventId]===false) return;
+  try{
+    await fetch(workerUrl, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({to, token, message})
+    });
+  }catch(e){
+    console.warn('LINE通知エラー:', e.message);
+  }
 }
 
 function saveSettings(){
