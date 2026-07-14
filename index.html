@@ -694,6 +694,8 @@ const DB = {
   getPointHistory: () => DB.get('pointHistory') || [],
   getThanks: () => DB.get('thanks') || [],
   setThanks: (d) => DB.set('thanks', d),
+  getAlbums: (spaceId) => { const all = DB.get('albums')||{}; return all[spaceId]||[]; },
+  setAlbums: (spaceId, list) => { const all = DB.get('albums')||{}; all[spaceId]=list; DB.set('albums',all); },
   getChats: function(room){
     if(window._fbDB){
       var data = window._fbChats[room] || {};
@@ -7025,9 +7027,7 @@ function renderChat(){
       Object.entries(reactCounts).forEach(function(entry){
         const emoji=entry[0];const count=entry[1];
         const isMine=myReaction===emoji;
-        const eIdx=['✅','👍','❤️','😊','👀'].indexOf(emoji);
-        const rIdx=['✅','👍','❤️','😊','👀'].indexOf(emoji); const call=rIdx>=0?'doReactDirect(this,'+rIdx+')':'';
-        h += '<button onclick="'+call+'" style="padding:2px 6px;border-radius:10px;border:1.5px solid '+(isMine?'var(--pink)':'#ddd')+';background:'+(isMine?'var(--pink-l)':'#fff')+';cursor:pointer;font-size:12px">'+emoji+' '+count+'</button>';
+        h += '<button data-rroom="'+room+'" data-rfbkey="'+fbKey+'" onclick="showReactionPickerBtn(this)" style="padding:2px 6px;border-radius:10px;border:1.5px solid '+(isMine?'var(--pink)':'#ddd')+';background:'+(isMine?'var(--pink-l)':'#fff')+';cursor:pointer;font-size:12px">'+emoji+' '+count+'</button>';
       });
       h += '</div>';
     }
@@ -7483,25 +7483,42 @@ function toggleReaction(room, fbKey, emoji){
 }
 
 function showReactionPicker(room, fbKey){
-  const REACT_EMOJIS = ['✅','👍','❤️','😊','👀'];
-  const labels = {'✅':'確認','👍':'いいね','❤️':'ハート','😊':'笑顔','👀':'見たよ'};
-  // グローバルにroom/fbKeyを保存してインデックス経由で呼ぶ
+  const REACT_EMOJIS = [
+    {e:'👍',l:'いいね'},  {e:'❤️',l:'ハート'},  {e:'😊',l:'嬉しい'},
+    {e:'🎉',l:'やった'},  {e:'✅',l:'確認'},    {e:'👀',l:'見たよ'},
+    {e:'🔥',l:'熱い'},    {e:'💪',l:'頑張れ'},  {e:'😂',l:'笑える'},
+    {e:'🥰',l:'かわいい'},{e:'👏',l:'拍手'},    {e:'💯',l:'最高'},
+    {e:'🙏',l:'感謝'},    {e:'😭',l:'泣ける'},  {e:'💅',l:'ナイス'},
+    {e:'⭐',l:'スター'},  {e:'😮',l:'驚き'},    {e:'🤔',l:'なるほど'},
+  ];
   window._reactRoom = room;
   window._reactFbKey = fbKey;
-  window._reactEmojis = REACT_EMOJIS;
+  window._reactEmojis = REACT_EMOJIS.map(function(r){return r.e;});
   const current = ((window._fbReactions[room]||{})[fbKey]||{})[S.user?.id] || '';
-  let html = '<div class="modal-title">リアクション</div>';
-  html += '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px">';
-  REACT_EMOJIS.forEach(function(e, idx){
-    const active = current === e;
-    html += '<button onclick="doReact('+idx+')" style="padding:10px 4px;border-radius:12px;border:2px solid '+(active?'var(--pink)':'#eee')+';background:'+(active?'var(--pink-l)':'#fff')+';cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px">';
-    html += '<span style="font-size:24px">'+e+'</span>';
-    html += '<span style="font-size:10px;color:#888">'+labels[e]+'</span>';
+
+  let html = '<div class="modal-title" style="font-size:15px">リアクションを選ぶ</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px">';
+  REACT_EMOJIS.forEach(function(r, idx){
+    const active = current === r.e;
+    html += '<button onclick="doReact('+idx+')" style="padding:8px 2px;border-radius:10px;border:2px solid '+(active?'var(--pink)':'#f0f0f0')+';background:'+(active?'var(--pink-l)':'#fff')+';cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px">';
+    html += '<span style="font-size:22px">'+r.e+'</span>';
+    html += '<span style="font-size:9px;color:#888">'+r.l+'</span>';
     html += '</button>';
   });
   html += '</div>';
-  html += '<button class="btn btn-ghost btn-sm btn-block" style="margin-top:12px" onclick="closeModal()">キャンセル</button>';
+  if(current){
+    html += '<button onclick="doReactRemove()" class="btn btn-ghost btn-sm btn-block" style="margin-top:10px">× リアクションを取り消す</button>';
+  }
+  html += '<button class="btn btn-ghost btn-sm btn-block" style="margin-top:6px" onclick="closeModal()">キャンセル</button>';
   showModal(html);
+}
+
+function doReactRemove(){
+  const room = window._reactRoom;
+  const fbKey = window._reactFbKey;
+  if(!room||!fbKey||!window._fbDB) return;
+  window._fbDB.ref(window._reactionsBasePath+'/'+room+'/'+fbKey+'/'+S.user?.id).remove();
+  closeModal();
 }
 
 function doReact(idx){
@@ -8888,7 +8905,76 @@ function renderSpaceChat(){
   h += '<button onclick="S.spaceTab=\'photos\';render()" style="flex:1;padding:8px;border:none;border-bottom:2px solid '+(spaceTab==='photos'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:13px;font-weight:'+(spaceTab==='photos'?'700':'400')+';color:'+(spaceTab==='photos'?'#7c4dff':'#999')+'">📸 写真</button>';
   h += '</div></div>';
 
-  if(spaceTab==='photos'){
+  // タブ
+  h += '<div style="display:flex;gap:0">';
+  h += '<button onclick="S.spaceTab=\'chat\';render()" style="flex:1;padding:8px;border:none;border-bottom:2px solid '+(spaceTab==='chat'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:13px;font-weight:'+(spaceTab==='chat'?'700':'400')+';color:'+(spaceTab==='chat'?'#7c4dff':'#999')+'">💬 チャット</button>';
+  h += '<button onclick="S.spaceTab=\'photos\';render()" style="flex:1;padding:8px;border:none;border-bottom:2px solid '+(spaceTab==='photos'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:13px;font-weight:'+(spaceTab==='photos'?'700':'400')+';color:'+(spaceTab==='photos'?'#7c4dff':'#999')+'">📸 写真</button>';
+  h += '<button onclick="S.spaceTab=\'album\';S.albumId=null;render()" style="flex:1;padding:8px;border:none;border-bottom:2px solid '+(spaceTab==='album'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:13px;font-weight:'+(spaceTab==='album'?'700':'400')+';color:'+(spaceTab==='album'?'#7c4dff':'#999')+'">📁 アルバム</button>';
+  h += '</div></div>';
+
+  if(spaceTab==='album'){
+    // アルバムタブ
+    const albums = DB.getAlbums(spaceId);
+    h += '<div style="flex:1;overflow-y:auto;padding:12px;background:#f8f5ff">';
+    if(S.albumId){
+      // アルバム内の写真一覧
+      const album = albums.find(function(a){return a.id===S.albumId;});
+      if(album){
+        h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">';
+        h += '<button onclick="S.albumId=null;render()" style="background:none;border:none;font-size:22px;cursor:pointer">←</button>';
+        h += '<div style="flex:1"><div style="font-weight:700;font-size:16px">'+escapeHtml(album.name)+'</div>';
+        h += '<div style="font-size:11px;color:#aaa">'+(album.photos||[]).length+'枚</div></div>';
+        if(isOwner()||album.createdBy===S.user?.id){
+          h += '<button onclick="deleteAlbum(\''+spaceId+'\',\''+album.id+'\')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px">🗑</button>';
+        }
+        h += '</div>';
+        const photos = album.photos||[];
+        if(!photos.length){
+          h += '<div style="text-align:center;color:#aaa;padding:40px 16px"><div style="font-size:48px">📷</div><div style="font-size:13px;margin-top:8px">まだ写真がありません</div></div>';
+        } else {
+          h += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:12px">';
+          photos.slice().reverse().forEach(function(p,i){
+            h += '<div style="position:relative;padding-top:100%;background:#eee;border-radius:4px;overflow:hidden;cursor:pointer" onclick="openAlbumPhoto(\''+spaceId+'\',\''+album.id+'\','+i+')">';
+            h += '<img src="'+p.url+'" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover">';
+            if(p.caption) h += '<div style="position:absolute;bottom:0;left:0;right:0;padding:4px;background:linear-gradient(transparent,rgba(0,0,0,.6));font-size:9px;color:#fff">'+escapeHtml(p.caption)+'</div>';
+            h += '</div>';
+          });
+          h += '</div>';
+        }
+        // 写真追加ボタン
+        h += '<label style="display:flex;align-items:center;justify-content:center;gap:8px;background:#7c4dff;color:#fff;border-radius:12px;padding:12px;cursor:pointer;font-weight:600;margin-bottom:8px">';
+        h += '📷 写真を追加';
+        h += '<input type="file" accept="image/*" multiple style="display:none" data-space="'+spaceId+'" data-album="'+album.id+'" onchange="addPhotosToAlbum(this)">';
+        h += '</label>';
+      }
+    } else {
+      // アルバム一覧
+      if(!albums.length){
+        h += '<div style="text-align:center;color:#aaa;padding:40px 16px"><div style="font-size:48px">📁</div><div style="font-size:14px;margin-top:8px">アルバムがありません</div><div style="font-size:12px;margin-top:4px">＋ボタンでアルバムを作成</div></div>';
+      }
+      albums.forEach(function(album){
+        const cover = (album.photos||[])[0];
+        const count = (album.photos||[]).length;
+        h += '<div onclick="S.albumId=\''+album.id+'\';render()" style="display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;padding:12px;margin-bottom:8px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.06)">';
+        h += '<div style="width:60px;height:60px;border-radius:10px;overflow:hidden;background:#ede7f6;flex-shrink:0;display:flex;align-items:center;justify-content:center">';
+        if(cover) h += '<img src="'+cover.url+'" style="width:100%;height:100%;object-fit:cover">';
+        else h += '<span style="font-size:28px">📷</span>';
+        h += '</div>';
+        h += '<div style="flex:1"><div style="font-weight:700;font-size:15px">'+escapeHtml(album.name)+'</div>';
+        h += '<div style="font-size:12px;color:#aaa">'+count+'枚 · '+album.createdByName+'</div></div>';
+        h += '<div style="color:#999;font-size:18px">›</div></div>';
+      });
+    }
+    h += '</div>';
+    // アルバム作成ボタン（一覧表示時のみ）
+    if(!S.albumId){
+      h += '<div style="padding:10px;background:#fff;border-top:1px solid #eee;flex-shrink:0">';
+      h += '<button onclick="showCreateAlbumModal(\''+spaceId+'\')" style="width:100%;background:#7c4dff;color:#fff;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:700;cursor:pointer">＋ 新しいアルバムを作成</button>';
+      h += '</div>';
+    } else {
+      h += '<div style="height:10px;background:#f8f5ff"></div>';
+    }
+  } else if(spaceTab==='photos'){
     // 写真フォルダ
     const photos = allMsgs.filter(function(m){ return m.type==='image'&&m.imageUrl; });
     h += '<div style="flex:1;overflow-y:auto;padding:12px;background:#f8f5ff">';
@@ -8959,6 +9045,124 @@ function renderSpaceChat(){
   setTimeout(function(){ var b=document.getElementById('spaceChatBox'); if(b) b.scrollTop=b.scrollHeight; },80);
   return h;
 }
+
+// ===== アルバム機能 =====
+function showCreateAlbumModal(spaceId){
+  showModal(`<div class="modal-title">📁 アルバムを作成</div>
+    <div class="form-group">
+      <label class="form-label">アルバム名</label>
+      <input class="form-input" id="album_name" placeholder="例: 施術デザイン集・研修2025・春コレクション">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="createAlbum('${spaceId}')">📁 作成する</button>`);
+}
+
+function createAlbum(spaceId){
+  const name = (document.getElementById('album_name')?.value||'').trim();
+  if(!name){ alert('アルバム名を入力してください'); return; }
+  const albums = DB.getAlbums(spaceId);
+  albums.push({
+    id: genId(),
+    name,
+    createdBy: S.user?.id||'',
+    createdByName: S.user?.name||'',
+    createdAt: Date.now(),
+    photos: []
+  });
+  DB.setAlbums(spaceId, albums);
+  closeModal();
+  render();
+}
+
+function addPhotosToAlbum(input){
+  const spaceId = input.dataset.space;
+  const albumId = input.dataset.album;
+  if(!input.files||!spaceId||!albumId) return;
+  const files = Array.from(input.files);
+  let loaded = 0;
+  files.forEach(function(file){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      const albums = DB.getAlbums(spaceId);
+      const idx = albums.findIndex(function(a){ return a.id===albumId; });
+      if(idx>=0){
+        if(!albums[idx].photos) albums[idx].photos=[];
+        albums[idx].photos.push({
+          url: e.target.result,
+          caption: '',
+          uploadedBy: S.user?.id||'',
+          uploadedByName: S.user?.name||'',
+          uploadedAt: Date.now()
+        });
+        DB.setAlbums(spaceId, albums);
+      }
+      loaded++;
+      if(loaded===files.length) render();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function openAlbumPhoto(spaceId, albumId, idx){
+  const albums = DB.getAlbums(spaceId);
+  const album = albums.find(function(a){ return a.id===albumId; });
+  if(!album) return;
+  const photos = (album.photos||[]).slice().reverse();
+  const photo = photos[idx];
+  if(!photo) return;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center';
+
+  const img = document.createElement('img');
+  img.src = photo.url;
+  img.style.cssText = 'max-width:100%;max-height:75vh;object-fit:contain;border-radius:8px';
+
+  const info = document.createElement('div');
+  info.style.cssText = 'color:#fff;font-size:12px;margin-top:12px;text-align:center;padding:0 20px';
+  info.innerHTML = (photo.caption?'<div style="font-size:14px;margin-bottom:6px">'+escapeHtml(photo.caption)+'</div>':'')
+    + '<div style="color:#aaa">'+photo.uploadedByName+' · '+new Date(photo.uploadedAt).toLocaleDateString('ja-JP')+'</div>';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.innerHTML = '×';
+  closeBtn.style.cssText = 'position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);border:none;color:#fff;font-size:28px;width:44px;height:44px;border-radius:50%;cursor:pointer';
+  closeBtn.onclick = function(){ document.body.removeChild(overlay); };
+
+  // キャプション編集（アップロード者またはオーナー）
+  if(isOwner()||photo.uploadedBy===S.user?.id){
+    const editBtn = document.createElement('button');
+    editBtn.innerHTML = '✏️ キャプション';
+    editBtn.style.cssText = 'margin-top:10px;background:rgba(255,255,255,.15);border:none;color:#fff;padding:8px 16px;border-radius:20px;cursor:pointer;font-size:13px';
+    editBtn.onclick = function(){
+      const cap = prompt('キャプションを入力:', photo.caption||'');
+      if(cap===null) return;
+      const als = DB.getAlbums(spaceId);
+      const ai = als.findIndex(function(a){return a.id===albumId;});
+      if(ai>=0){
+        const pi = (als[ai].photos||[]).length - 1 - idx;
+        if(als[ai].photos[pi]) als[ai].photos[pi].caption = cap;
+        DB.setAlbums(spaceId, als);
+      }
+      document.body.removeChild(overlay);
+      render();
+    };
+    overlay.appendChild(editBtn);
+  }
+
+  overlay.onclick = function(e){ if(e.target===overlay) document.body.removeChild(overlay); };
+  overlay.appendChild(closeBtn);
+  overlay.appendChild(img);
+  overlay.appendChild(info);
+  document.body.appendChild(overlay);
+}
+
+function deleteAlbum(spaceId, albumId){
+  if(!confirm('このアルバムを削除しますか？\n写真も全て削除されます。')) return;
+  const albums = DB.getAlbums(spaceId).filter(function(a){ return a.id!==albumId; });
+  DB.setAlbums(spaceId, albums);
+  S.albumId = null;
+  render();
+}
+// ===== アルバム機能ここまで =====
 
 function sendSpaceChatBtn(btn){
   sendSpaceChat(btn.dataset.sroom);
