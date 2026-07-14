@@ -696,6 +696,8 @@ const DB = {
   setThanks: (d) => DB.set('thanks', d),
   getAlbums: (spaceId) => { const all = DB.get('albums')||{}; return all[spaceId]||[]; },
   setAlbums: (spaceId, list) => { const all = DB.get('albums')||{}; all[spaceId]=list; DB.set('albums',all); },
+  getSpaceTasks: (spaceId) => { const all = DB.get('spaceTasks')||{}; return (all[spaceId]||[]).sort(function(a,b){return (b.createdAt||0)-(a.createdAt||0);}); },
+  setSpaceTasks: (spaceId, list) => { const all = DB.get('spaceTasks')||{}; all[spaceId]=list; DB.set('spaceTasks',all); },
   getChats: function(room){
     if(window._fbDB){
       var data = window._fbChats[room] || {};
@@ -8912,7 +8914,66 @@ function renderSpaceChat(){
   h += '<button onclick="S.spaceTab=\'album\';S.albumId=null;render()" style="flex:1;padding:8px;border:none;border-bottom:2px solid '+(spaceTab==='album'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:13px;font-weight:'+(spaceTab==='album'?'700':'400')+';color:'+(spaceTab==='album'?'#7c4dff':'#999')+'">📁 アルバム</button>';
   h += '</div></div>';
 
-  if(spaceTab==='album'){
+  // タブ
+  h += '<div style="display:flex;gap:0;overflow-x:auto">';
+  h += '<button onclick="S.spaceTab=\'chat\';render()" style="flex:1;min-width:60px;padding:8px 4px;border:none;border-bottom:2px solid '+(spaceTab==='chat'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:12px;font-weight:'+(spaceTab==='chat'?'700':'400')+';color:'+(spaceTab==='chat'?'#7c4dff':'#999')+'">💬 チャット</button>';
+  h += '<button onclick="S.spaceTab=\'tasks\';render()" style="flex:1;min-width:60px;padding:8px 4px;border:none;border-bottom:2px solid '+(spaceTab==='tasks'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:12px;font-weight:'+(spaceTab==='tasks'?'700':'400')+';color:'+(spaceTab==='tasks'?'#7c4dff':'#999')+'">📋 タスク</button>';
+  h += '<button onclick="S.spaceTab=\'photos\';render()" style="flex:1;min-width:60px;padding:8px 4px;border:none;border-bottom:2px solid '+(spaceTab==='photos'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:12px;font-weight:'+(spaceTab==='photos'?'700':'400')+';color:'+(spaceTab==='photos'?'#7c4dff':'#999')+'">📸 写真</button>';
+  h += '<button onclick="S.spaceTab=\'album\';S.albumId=null;render()" style="flex:1;min-width:60px;padding:8px 4px;border:none;border-bottom:2px solid '+(spaceTab==='album'?'#7c4dff':'transparent')+';background:none;cursor:pointer;font-size:12px;font-weight:'+(spaceTab==='album'?'700':'400')+';color:'+(spaceTab==='album'?'#7c4dff':'#999')+'">📁 アルバム</button>';
+  h += '</div></div>';
+
+  if(spaceTab==='tasks'){
+    // タスクタブ
+    const spaceTasks = DB.getSpaceTasks(spaceId);
+    const taskFilter = S.spaceTaskFilter||'all';
+    const filteredTasks = taskFilter==='mine'
+      ? spaceTasks.filter(function(t){ return (t.assignees||[]).includes(S.user?.id)||t.createdBy===S.user?.id; })
+      : taskFilter==='open'
+      ? spaceTasks.filter(function(t){ return t.status!=='完了'; })
+      : spaceTasks;
+
+    h += '<div style="flex:1;overflow-y:auto;padding:12px;background:#f8f5ff">';
+    // フィルター
+    h += '<div style="display:flex;gap:6px;margin-bottom:12px">';
+    ['all','open','mine'].forEach(function(f){
+      const label = f==='all'?'すべて':f==='open'?'未完了':'自分';
+      h += '<button onclick="S.spaceTaskFilter=\''+f+'\';render()" style="padding:5px 12px;border-radius:20px;border:none;background:'+(taskFilter===f?'#7c4dff':'#e0d7ff')+';color:'+(taskFilter===f?'#fff':'#7c4dff')+';cursor:pointer;font-size:12px;font-weight:600">'+label+'</button>';
+    });
+    h += '</div>';
+
+    if(!filteredTasks.length){
+      h += '<div style="text-align:center;color:#aaa;padding:40px 16px"><div style="font-size:48px">📋</div><div style="font-size:14px;margin-top:8px">タスクがありません</div></div>';
+    }
+
+    filteredTasks.forEach(function(task){
+      const myStatus = (task.progress||{})[S.user?.id]||'未対応';
+      const doneCount = Object.values(task.progress||{}).filter(function(v){return v==='完了';}).length;
+      const totalCount = (task.assignees||[]).length||1;
+      const pct = Math.round(doneCount/totalCount*100);
+      const isExpired = task.deadline && new Date(task.deadline)<new Date() && task.status!=='完了';
+      const statusColor = myStatus==='完了'?'var(--success)':myStatus==='対応中'?'var(--warn)':'#aaa';
+
+      h += '<div style="background:#fff;border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.06);border-left:4px solid '+statusColor+';cursor:pointer" onclick="openSpaceTask(\''+spaceId+'\',\''+task.id+'\')">';
+      h += '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:6px">';
+      h += '<div style="flex:1"><div style="font-weight:700;font-size:14px">'+escapeHtml(task.title)+'</div>';
+      if(task.deadline) h += '<div style="font-size:11px;color:'+(isExpired?'var(--danger)':'#aaa')+';margin-top:2px">📅 '+fmtDateFull(task.deadline)+(isExpired?' ⚠️期限超過':'')+'</div>';
+      h += '</div>';
+      h += '<span style="font-size:11px;padding:3px 8px;border-radius:10px;background:'+(myStatus==='完了'?'#e8f5e9':myStatus==='対応中'?'#fff8e1':'#f5f5f5')+';color:'+statusColor+';font-weight:600;white-space:nowrap">'+myStatus+'</span>';
+      h += '</div>';
+      if(totalCount>1){
+        h += '<div style="display:flex;align-items:center;gap:6px;margin-top:6px">';
+        h += '<div style="flex:1;height:4px;background:#eee;border-radius:2px"><div style="width:'+pct+'%;height:100%;background:var(--success);border-radius:2px"></div></div>';
+        h += '<span style="font-size:10px;color:#aaa">'+doneCount+'/'+totalCount+'完了</span>';
+        h += '</div>';
+      }
+      h += '<div style="font-size:11px;color:#aaa;margin-top:6px">作成: '+escapeHtml(task.createdByName||'')+'</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+    h += '<div style="padding:10px;background:#fff;border-top:1px solid #eee;flex-shrink:0">';
+    h += '<button onclick="showCreateSpaceTaskModal(\''+spaceId+'\')" style="width:100%;background:#7c4dff;color:#fff;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:700;cursor:pointer">＋ タスクを作成</button>';
+    h += '</div>';
+  } else if(spaceTab==='album'){
     // アルバムタブ
     const albums = DB.getAlbums(spaceId);
     h += '<div style="flex:1;overflow-y:auto;padding:12px;background:#f8f5ff">';
@@ -9045,6 +9106,137 @@ function renderSpaceChat(){
   setTimeout(function(){ var b=document.getElementById('spaceChatBox'); if(b) b.scrollTop=b.scrollHeight; },80);
   return h;
 }
+
+// ===== スペース タスク機能 =====
+function showCreateSpaceTaskModal(spaceId){
+  const spaces = DB.get('chatSpaces')||[];
+  const space = spaces.find(function(s){return s.id===spaceId;})||{};
+  const members = (space.members||[]).map(function(id){
+    return STAFF_LIST.find(function(s){return s.id===id;});
+  }).filter(Boolean);
+
+  showModal(`<div class="modal-title">📋 タスクを作成</div>
+    <div class="form-group"><label class="form-label">タスク名 <span style="color:var(--danger)">*</span></label>
+      <input class="form-input" id="st_title" placeholder="例: 商品棚の整理・マニュアル更新"></div>
+    <div class="form-group"><label class="form-label">詳細（任意）</label>
+      <textarea class="form-input" id="st_body" rows="3" placeholder="詳しい説明や手順など"></textarea></div>
+    <div class="form-group"><label class="form-label">期限（任意）</label>
+      <input type="date" class="form-input" id="st_deadline"></div>
+    <div class="form-group"><label class="form-label">担当者（複数選択可）</label>
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto">
+        <label style="display:flex;align-items:center;gap:8px;padding:8px;background:#f8f8f8;border-radius:8px;cursor:pointer">
+          <input type="checkbox" id="st_all" onchange="toggleAllAssignees(this)" style="width:18px;height:18px">
+          <span style="font-size:13px;font-weight:600">👥 全員</span>
+        </label>
+        ${members.map(function(s){
+          return '<label style="display:flex;align-items:center;gap:8px;padding:8px;background:#f8f8f8;border-radius:8px;cursor:pointer">'
+            +'<input type="checkbox" class="st_assignee" value="'+s.id+'" style="width:18px;height:18px">'
+            +'<span style="font-size:13px">'+s.name+'（'+s.title+'）</span>'
+            +'</label>';
+        }).join('')}
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="saveSpaceTask('${spaceId}')">📋 作成する</button>`);
+}
+
+function toggleAllAssignees(cb){
+  document.querySelectorAll('.st_assignee').forEach(function(el){ el.checked = cb.checked; });
+}
+
+function saveSpaceTask(spaceId){
+  const title = (document.getElementById('st_title')?.value||'').trim();
+  const body = (document.getElementById('st_body')?.value||'').trim();
+  const deadline = document.getElementById('st_deadline')?.value||'';
+  if(!title){ alert('タスク名を入力してください'); return; }
+
+  const assignees = Array.from(document.querySelectorAll('.st_assignee:checked')).map(function(el){return el.value;});
+  const progress = {};
+  assignees.forEach(function(id){ progress[id]='未対応'; });
+
+  const tasks = DB.getSpaceTasks(spaceId);
+  tasks.unshift({
+    id: genId(),
+    title, body, deadline,
+    assignees,
+    progress,
+    status: '未対応',
+    createdBy: S.user?.id||'',
+    createdByName: S.user?.name||'',
+    createdAt: Date.now()
+  });
+  DB.setSpaceTasks(spaceId, tasks);
+  closeModal();
+  render();
+  // チャットに通知
+  if(assignees.length>0){
+    const d = new Date();
+    const time = (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+    DB.addChat(spaceId, {id:genId(), text:'📋 新しいタスクが作成されました：「'+title+'」'+(deadline?' (期限: '+fmtDateFull(deadline)+')':''), room:spaceId, senderId:'system', senderName:'タスク', time});
+  }
+}
+
+function openSpaceTask(spaceId, taskId){
+  const tasks = DB.getSpaceTasks(spaceId);
+  const task = tasks.find(function(t){return t.id===taskId;});
+  if(!task) return;
+
+  const myStatus = (task.progress||{})[S.user?.id]||'未対応';
+  const isAssigned = (task.assignees||[]).includes(S.user?.id);
+  const progOptions = ['未対応','対応中','完了'];
+  const statusColors = {'未対応':'#aaa','対応中':'var(--warn)','完了':'var(--success)'};
+
+  const memberProgress = (task.assignees||[]).map(function(id){
+    const s = STAFF_LIST.find(function(x){return x.id===id;});
+    const st = (task.progress||{})[id]||'未対応';
+    return s ? '<div class="att-item"><span>'+s.name+'</span><span style="font-size:12px;color:'+statusColors[st]+'">'+st+'</span></div>' : '';
+  }).join('');
+
+  showModal(`
+    <div class="modal-title" style="font-size:16px">📋 ${escapeHtml(task.title)}</div>
+    ${task.deadline?`<div style="background:#f8f8f8;border-radius:8px;padding:8px 12px;font-size:13px;margin-bottom:10px">📅 期限: <strong>${fmtDateFull(task.deadline)}</strong></div>`:''}
+    ${task.body?`<div style="font-size:14px;line-height:1.8;white-space:pre-wrap;background:#f8f8f8;padding:12px;border-radius:10px;margin-bottom:12px">${escapeHtml(task.body)}</div>`:''}
+    ${isAssigned?`
+    <div style="margin-bottom:14px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">自分の進捗を更新</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        ${progOptions.map(function(p){
+          return '<button onclick="updateSpaceTaskProgress(\''+spaceId+'\',\''+taskId+'\',\''+p+'\')" style="padding:10px 4px;border-radius:10px;border:2px solid '+(myStatus===p?'var(--pink)':'#eee')+';background:'+(myStatus===p?'var(--pink-l)':'#fff')+';cursor:pointer;font-size:13px;font-weight:'+(myStatus===p?'700':'400')+'">'+
+            (p==='完了'?'✅':p==='対応中'?'🔄':'⬜')+' '+p+'</button>';
+        }).join('')}
+      </div>
+    </div>`:''}
+    ${memberProgress?`<div style="margin-bottom:14px"><div style="font-size:13px;font-weight:700;margin-bottom:8px">メンバーの進捗</div>${memberProgress}</div>`:''}
+    <div style="font-size:12px;color:#aaa;margin-bottom:12px">作成: ${escapeHtml(task.createdByName)} · ${fmtDateFull(new Date(task.createdAt).toISOString().slice(0,10))}</div>
+    <div style="display:grid;grid-template-columns:${isOwner()||task.createdBy===S.user?.id?'1fr 1fr':'1fr'};gap:8px">
+      ${isOwner()||task.createdBy===S.user?.id?`<button class="btn btn-danger btn-sm" onclick="deleteSpaceTask('${spaceId}','${taskId}')">🗑 削除</button>`:''}
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">閉じる</button>
+    </div>`);
+}
+
+function updateSpaceTaskProgress(spaceId, taskId, status){
+  const tasks = DB.getSpaceTasks(spaceId);
+  const idx = tasks.findIndex(function(t){return t.id===taskId;});
+  if(idx>=0){
+    if(!tasks[idx].progress) tasks[idx].progress={};
+    tasks[idx].progress[S.user?.id] = status;
+    // 全員完了なら全体ステータスも完了に
+    const assignees = tasks[idx].assignees||[];
+    const allDone = assignees.length>0 && assignees.every(function(id){return tasks[idx].progress[id]==='完了';});
+    tasks[idx].status = allDone?'完了':status==='完了'?'対応中':tasks[idx].status;
+    DB.setSpaceTasks(spaceId, tasks);
+    if(status==='完了' && S.user) addPoints(S.user.id,'📋 タスク完了',POINT_RULES.task_done||5);
+  }
+  closeModal();
+  render();
+}
+
+function deleteSpaceTask(spaceId, taskId){
+  if(!confirm('このタスクを削除しますか？')) return;
+  DB.setSpaceTasks(spaceId, DB.getSpaceTasks(spaceId).filter(function(t){return t.id!==taskId;}));
+  closeModal();
+  render();
+}
+// ===== スペース タスク機能ここまで =====
 
 // ===== アルバム機能 =====
 function showCreateAlbumModal(spaceId){
