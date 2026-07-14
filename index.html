@@ -479,53 +479,27 @@ function formatManualBody(body){
 }
 
 // デフォルトスタッフ（初回セットアップ前のフォールバック）
-const DEFAULT_STAFF_LIST = [
-  {id:'shoko',   name:'shoko',   store:'both',role:'admin',   title:'管理者',      treat:false},
-  {id:'haruka',  name:'haruka',  store:'both',role:'owner',   title:'オーナー',    treat:false,noRank:true,noSales:true},
-  {id:'misa',    name:'misa',    store:'A',   role:'manager', title:'Visual Director',treat:true ,designAdmin:true,taskAdmin:true,shiftAdmin:'B'},
-  {id:'wakana',  name:'wakana',  store:'A',   role:'sub',     title:'Main Leader', treat:true ,taskAdmin:true,shiftAdmin:'A'},
-  {id:'nao',     name:'nao',     store:'A',   role:'staff',   title:'Support',     treat:true },
-  {id:'haru',    name:'haru',    store:'A',   role:'staff',   title:'スタッフ',    treat:true ,contractor:true},
-  {id:'natsuki', name:'natsuki', store:'A',   role:'staff',   title:'スタッフ',    treat:true ,contractor:true},
-  {id:'yuko',    name:'yu',      store:'A',   role:'staff',   title:'スタッフ',    treat:true },
-  {id:'kana',    name:'kana',    store:'B',   role:'staff',   title:'スタッフ',    treat:true ,contractor:true},
-  {id:'sanako',  name:'sanako',  store:'B',   role:'staff',   title:'スタッフ',    treat:true ,contractor:true},
-];
+// ※ DEFAULT_STAFF_LIST は空（各サロンがセットアップで自分のスタッフを登録）
+const DEFAULT_STAFF_LIST = [];
 
-// 動的STAFF_LIST（アプリ内設定 or デフォルト）
-// IDベースの固定ロールマップ（Firebase データが壊れても必ず正しい権限になる）
-var FIXED_ROLES = {shoko:'admin', haruka:'owner'};
+// ロール正規化（IDへの依存なし・汎用）
 function normalizeStaff(list){
   return list.map(function(s){
     var result = Object.assign({}, s);
-    // roleが消えていたらIDから復元
-    if(!result.role) result.role = FIXED_ROLES[result.id] || 'staff';
-    // shokoとharukaのroleは常に固定（書き換え不可）
-    if(FIXED_ROLES[result.id]) result.role = FIXED_ROLES[result.id];
+    if(!result.role) result.role = 'staff';
     var isAdmin = result.role==='admin' || result.role==='owner';
-    // treat/noSales/noRankが未設定または管理者なのにtreat:trueになっている場合も補正
     if(s.treat===undefined) result.treat = !isAdmin;
     if(s.noSales===undefined) result.noSales = isAdmin;
     if(s.noRank===undefined) result.noRank = isAdmin;
     return result;
   });
 }
-function ensureAdmins(list){
-  // shokoとharukaは必ずSTAFF_LISTに存在させる
-  var admins = DEFAULT_STAFF_LIST.filter(function(s){ return FIXED_ROLES[s.id]; });
-  admins.forEach(function(def){
-    if(!list.find(function(s){ return s.id===def.id; })){
-      list = [def].concat(list);
-    }
-  });
-  return list;
-}
 function loadStaffList(){
   try{
     const saved = window._fbCache && window._fbCache['staffConfig'];
-    if(saved && Array.isArray(saved) && saved.length > 0) return ensureAdmins(normalizeStaff(saved));
+    if(saved && Array.isArray(saved) && saved.length > 0) return normalizeStaff(saved);
     const local = localStorage.getItem('salon_staffConfig');
-    if(local){const p=JSON.parse(local); if(Array.isArray(p)&&p.length>0) return ensureAdmins(normalizeStaff(p));}
+    if(local){const p=JSON.parse(local); if(Array.isArray(p)&&p.length>0) return normalizeStaff(p);}
   }catch(e){}
   return DEFAULT_STAFF_LIST;
 }
@@ -840,7 +814,7 @@ const S = {
 };
 
 // IDが shoko/haruka なら role に関わらず常にオーナー権限
-function isOwner(){ return S.user && (S.user.role==='admin'||S.user.role==='owner'||S.user.id==='shoko'||S.user.id==='haruka'); }
+function isOwner(){ return S.user && (S.user.role==='admin'||S.user.role==='owner'); }
 function isDesignAdmin(){ return isOwner() || (S.user && S.user.designAdmin); }
 function isTaskAdmin(){ return isOwner() || (S.user && S.user.taskAdmin); }
 function isShiftAdmin(){ return isOwner() || (S.user && S.user.shiftAdmin); }
@@ -1040,23 +1014,26 @@ function renderBottomNav(active){
 }
 function renderLogin(){
   const sel = S._loginStore;
+  const cfg = getAppConfig();
+  const stores = cfg?.stores || [{id:'A',name:'店舗A'}];
+  const appName = cfg?.appName || 'Cura';
   const storeStaff = sel
     ? STAFF_LIST.filter(s => sel==='owner' ? (s.role==='admin'||s.role==='owner') : s.store===sel||s.store==='both' && !(s.role==='admin'||s.role==='owner'))
     : [];
   return `<div class="login-wrap">
     <div class="login-logo"><img id="brand-logo" src="" style="height:80px;width:auto;border-radius:16px;object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,.15)" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span style="display:none;font-size:56px">💅</span></div>
-    <div class="login-appname">${getAppConfig()?.appName||'Cura'}</div>
+    <div class="login-appname">${appName}</div>
     <div class="login-sub">ネイルサロン管理アプリ</div>
     <div class="login-card">
       <div class="section-title">🏪 店舗を選んでください</div>
-      <div class="store-btns">
-        <button class="store-btn ${sel==='A'?'sel-a':''}" onclick="S._loginStore='A';render()">浦和店</button>
-        <button class="store-btn ${sel==='B'?'sel-b':''}" onclick="S._loginStore='B';render()">広尾店</button>
-        <button class="store-btn ${sel==='owner'?'sel-owner':''}" onclick="S._loginStore='owner';render()">オーナー</button>
+      <div class="store-btns" style="grid-template-columns:repeat(${stores.length+1},1fr)">
+        ${stores.map(st=>`<button class="store-btn ${sel===st.id?'sel-a':''}" onclick="S._loginStore='${st.id}';render()">${st.name}</button>`).join('')}
+        <button class="store-btn ${sel==='owner'?'sel-owner':''}" onclick="S._loginStore='owner';render()">管理者</button>
       </div>
       ${sel ? `<div class="section-title">👤 名前を選んでください</div>
         <div class="staff-grid">
-          ${storeStaff.map(s=>`<button class="staff-btn" onclick="doLogin('${s.id}')">${s.name}<br><span style="font-size:11px;color:var(--mid)">${s.title}</span><br><span style="font-size:10px;color:var(--pink)">${getStoreLabel(s.store)}</span></button>`).join('')}
+          ${storeStaff.length===0?'<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">スタッフがいません</div>':''}
+          ${storeStaff.map(s=>`<button class="staff-btn" onclick="doLogin('${s.id}')">${s.name}<br><span style="font-size:11px;color:var(--mid)">${s.title}</span></button>`).join('')}
         </div>` : ''}
     </div>
   </div>`;
@@ -1066,7 +1043,6 @@ function doLogin(staffId){
   let user = STAFF_LIST.find(s=>s.id===staffId);
   if(!user) return;
   // ログイン時にもroleを必ず正しく設定
-  if(FIXED_ROLES[staffId]) user = Object.assign({}, user, {role: FIXED_ROLES[staffId]});
   const pins = DB.getPins();
   const userPin = pins[staffId];
   if(userPin){
@@ -1088,7 +1064,6 @@ function confirmPin(){
   if(!user) return;
   if(S.pinInput === pins[user.id]){
     // PIN確認後もroleを必ず正しく設定
-    if(FIXED_ROLES[user.id]) user = Object.assign({}, user, {role: FIXED_ROLES[user.id]});
     S.user = user;
     S.store = user.store==='both' ? 'A' : user.store;
     S.viewStore = user.store==='both' ? 'A' : user.store;
@@ -9274,7 +9249,7 @@ function renderSetup(){
         <button class="btn btn-primary btn-block" style="margin-top:8px;font-size:16px;padding:14px" onclick="goSetup2()">次へ →</button>
       </div>
       <div style="text-align:center;margin-top:16px">
-        <button onclick="skipSetup()" style="background:none;border:none;color:var(--mid);font-size:13px;cursor:pointer;text-decoration:underline">スキップ（デフォルト設定を使用）</button>
+        <button onclick="showSalonCodeEntry()" style="background:none;border:none;color:var(--mid);font-size:13px;cursor:pointer;text-decoration:underline">すでにコードをお持ちの方はこちら</button>
       </div>
     </div>
   </div>`;
@@ -9459,19 +9434,58 @@ function completeSetup(){
   S.page='login'; render();
 }
 
+// サロンコードで再接続
+function showSalonCodeEntry(){
+  showModal(`<div class="modal-title">🔑 サロンコードで接続</div>
+    <div style="font-size:13px;color:var(--mid);margin-bottom:16px">管理者から共有されたサロンコードを入力してください</div>
+    <div class="form-group">
+      <label class="form-label">サロンコード</label>
+      <input class="form-input" id="salon_code_input" placeholder="例: abc12345" style="font-size:18px;letter-spacing:2px;text-align:center" autocomplete="off">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="connectWithCode()">🚀 接続する</button>
+    <button class="btn btn-ghost btn-sm btn-block" style="margin-top:8px" onclick="closeModal()">キャンセル</button>`);
+}
+
+function connectWithCode(){
+  const code = (document.getElementById('salon_code_input')?.value||'').trim().toLowerCase();
+  if(!code){ alert('コードを入力してください'); return; }
+  // コードで名前空間を設定してFirebaseに接続
+  localStorage.setItem('salon_ns', code);
+  window._salonNs = code;
+  window._dataPath = '/salons/'+code;
+  window._chatsBasePath = '/salons/'+code+'/chats';
+  window._reactionsBasePath = '/salons/'+code+'/reactions';
+  window._pinnedBasePath = '/salons/'+code+'/pinned';
+  window._chatReadBasePath = '/salons/'+code+'/chatRead';
+  closeModal();
+  // Firebaseを再接続してデータ確認
+  if(window._fbDB){
+    window._fbDB.ref(window._dataPath+'/appConfig').once('value', function(snap){
+      if(snap.val()){
+        // アプリ設定が存在 → ログイン画面へ
+        window._fbCache = {};
+        window._fbReady = false;
+        // メインリスナーを再設定
+        window._fbDB.ref(window._dataPath).on('value', function(s){
+          window._fbCache = s.val()||{};
+          window._fbReady = true;
+          STAFF_LIST = loadStaffList();
+          if(window._appMounted) render();
+        });
+        S.page='login'; render();
+      } else {
+        alert('❌ このコードのサロンが見つかりません。\nコードを確認してください。');
+        localStorage.removeItem('salon_ns');
+      }
+    });
+  } else {
+    S.page='login'; render();
+  }
+}
+
 function skipSetup(){
-  if(!confirm('既存データを引き継ぎますか？\n（現在のFirebaseデータをそのまま使用します）')) return;
-  // 既存データ用：名前空間をクリアして元のパスを使用
-  localStorage.removeItem('salon_ns');
-  window._salonNs = '';
-  window._dataPath = '/data';
-  window._chatsBasePath = '/chats';
-  window._reactionsBasePath = '/reactions';
-  window._pinnedBasePath = '/pinned';
-  window._chatReadBasePath = '/chatRead';
-  const cfg = {appName:'My Salon',stores:[{id:'A',name:'店舗A'},{id:'B',name:'店舗B'}],storeCount:1,setupAt:new Date().toISOString()};
-  saveAppConfig(cfg);
-  S.page='login'; render();
+  // 廃止（後方互換のため残す）
+  showSalonCodeEntry();
 }
 
 function resetToExistingData(){
@@ -9587,7 +9601,6 @@ function saveStaffMember(editId){
 }
 
 function deleteStaffMember(id){
-  if(FIXED_ROLES[id]){ alert('このアカウントは削除できません'); return; }
   if(!confirm('このスタッフを削除しますか？')) return;
   const list = STAFF_LIST.filter(s=>s.id!==id);
   saveStaffConfig(list);
@@ -9596,7 +9609,6 @@ function deleteStaffMember(id){
 
 // 退社（inactiveフラグ → データ保持・一覧から非表示）
 function retireStaff(id, encodedName){
-  if(FIXED_ROLES[id]){ alert('このアカウントは退社処理できません'); return; }
   const name = decodeURIComponent(encodedName);
   if(!confirm(name+'さんを退社処理しますか？\n（データは保持されます。元に戻すことも可能です）')) return;
   const list = STAFF_LIST.map(s=> s.id===id ? Object.assign({},s,{inactive:true, retiredAt: today()}) : s);
