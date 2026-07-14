@@ -3181,8 +3181,8 @@ function renderSettings(){
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <span style="font-size:22px">💬</span>
         <div>
-          <div class="fw-bold" style="color:#06C755">LINE WORKS 通知設定</div>
-          <div style="font-size:11px;color:var(--mid)">社内のLINE WORKSチャンネルに自動通知</div>
+          <div class="fw-bold" style="color:#06C755">LINE 個人通知設定</div>
+          <div style="font-size:11px;color:var(--mid)">スタッフの個人LINEに直接通知</div>
         </div>
       </div>
       <div class="form-group">
@@ -3190,19 +3190,9 @@ function renderSettings(){
         <input class="form-input" id="line_worker_url" value="${DB.getSettings().lineWorkerUrl||''}" placeholder="https://xxx.workers.dev">
       </div>
       <div class="form-group">
-        <label class="form-label">Bot ID</label>
-        <input class="form-input" id="line_bot_id" value="${DB.getSettings().lineBotId||''}" placeholder="例: 1234567">
-        <div style="font-size:11px;color:var(--mid);margin-top:3px">Developer Console → Bot → Bot ID</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">通知先 チャンネルID</label>
-        <input class="form-input" id="line_channel_id" value="${DB.getSettings().lineChannelId||''}" placeholder="例: xxxxxxxxxx">
-        <div style="font-size:11px;color:var(--mid);margin-top:3px">Botを招待したチャンネルのID</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">アクセストークン</label>
-        <input class="form-input" id="line_token" type="password" value="${DB.getSettings().lineToken||''}" placeholder="サービスアカウントのAccess Token">
-        <div style="font-size:11px;color:var(--mid);margin-top:3px">Developer Console → サービスアカウント → トークン発行</div>
+        <label class="form-label">チャンネルアクセストークン</label>
+        <input class="form-input" id="line_token" type="password" value="${DB.getSettings().lineToken||''}" placeholder="LINE Messaging API アクセストークン">
+        <div style="font-size:11px;color:var(--mid);margin-top:3px">LINE Developersコンソール → チャンネル → アクセストークン</div>
       </div>
       <div class="form-group">
         <label class="form-label">通知するイベント</label>
@@ -3221,6 +3211,12 @@ function renderSettings(){
             </label>`;
           }).join('')}
         </div>
+      </div>
+      <div style="background:#e8f5e9;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#2e7d32">
+        <strong>📱 スタッフの登録手順</strong><br>
+        1. LINE公式アカウントを友達追加<br>
+        2. 自分のスタッフ名を送る（例：「nao」）<br>
+        3. 以後、個人LINEに通知が届く
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         <button class="btn btn-outline btn-sm" onclick="testLineNotification()">🔔 テスト送信</button>
@@ -3592,51 +3588,58 @@ function saveStaffTargets(){
 
 function saveLineSettings(){
   const workerUrl = document.getElementById('line_worker_url')?.value.trim()||'';
-  const botId     = document.getElementById('line_bot_id')?.value.trim()||'';
-  const channelId = document.getElementById('line_channel_id')?.value.trim()||'';
   const token     = document.getElementById('line_token')?.value.trim()||'';
   const events = {};
   ['ln_notice','ln_message','ln_shift','ln_absence'].forEach(id=>{
     events[id] = document.getElementById(id)?.checked!==false;
   });
   const cfg = DB.getSettings();
-  DB.set('settings', Object.assign({}, cfg, {
-    lineWorkerUrl: workerUrl,
-    lineBotId: botId,
-    lineChannelId: channelId,
-    lineToken: token,
-    lineEvents: events
-  }));
-  alert('✅ LINE WORKS設定を保存しました！\nテスト送信で動作確認してください。');
+  DB.set('settings', Object.assign({}, cfg, {lineWorkerUrl:workerUrl, lineToken:token, lineEvents:events}));
+  alert('✅ LINE設定を保存しました！\nスタッフに友達追加＆名前送信をお願いしてください。');
 }
 
 function testLineNotification(){
-  sendLineNotification('🔔 Curaからのテスト通知です！\nLINE WORKS連携が正常に完了しました ✅').then(function(ok){
-    if(ok) alert('✅ テスト送信成功！LINE WORKSを確認してください。');
-    else alert('❌ 送信失敗。Worker URLやBot ID・チャンネルID・トークンを確認してください。');
+  sendLineNotification('🔔 Curaからのテスト通知です！\n個人LINE連携が正常に完了しました ✅', null, true).then(function(ok){
+    if(ok) alert('✅ テスト送信成功！LINEを確認してください。');
+    else alert('❌ 送信失敗。Worker URLとアクセストークンを確認してください。');
   });
 }
 
-async function sendLineNotification(message, eventId){
+async function sendLineNotification(message, eventId, isTest){
   const cfg = DB.getSettings();
   const workerUrl = cfg.lineWorkerUrl;
-  const botId     = cfg.lineBotId;
-  const channelId = cfg.lineChannelId;
   const token     = cfg.lineToken;
   const events    = cfg.lineEvents||{};
-  if(!workerUrl||!botId||!channelId||!token) return false;
+  if(!workerUrl||!token) return false;
   if(eventId && events[eventId]===false) return false;
+
+  // Firebase から登録済みのLINE IDを取得
+  const lineIds = await getRegisteredLineIds();
+  if(!lineIds.length && !isTest) return false;
+
   try{
-    const res = await fetch(workerUrl, {
+    const endpoint = isTest ? workerUrl+'/notify' : workerUrl+'/broadcast';
+    const body = isTest
+      ? {token, lineUserId: lineIds[0]||'test', message}
+      : {token, lineIds, message};
+
+    const res = await fetch(endpoint, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({botId, channelId, token, message})
+      body: JSON.stringify(body)
     });
     return res.ok;
   }catch(e){
-    console.warn('LINE WORKS通知エラー:', e.message);
+    console.warn('LINE通知エラー:', e.message);
     return false;
   }
+}
+
+async function getRegisteredLineIds(){
+  // Firebaseからスタッフが登録したLINE IDを取得
+  if(!window._fbCache) return [];
+  const lineIds = window._fbCache['lineIds']||{};
+  return Object.values(lineIds).filter(Boolean);
 }
 
 function saveSettings(){
