@@ -3255,6 +3255,7 @@ function renderSettings(){
         <div style="font-size:12px;color:var(--mid);margin-bottom:8px">既存データが見えない場合はリセットしてください</div>
         <button class="btn btn-sm btn-block" style="background:var(--warn);color:#fff;border:none" onclick="resetToExistingData()">🔄 既存データに戻す</button>
       </div>`:''}
+      ${S.user?.id==='shoko'?`<button class="btn btn-sm btn-block" style="background:#7c4dff;color:#fff;border:none;margin-bottom:8px" onclick="resetStaffToDefault()">👥 スタッフをblancher初期設定に戻す</button>`:''}
       <button class="btn btn-danger btn-sm btn-block" onclick="if(confirm('全データを削除しますか？この操作は取り消せません。')){clearAllData()}">🗑 全データをリセット（完全削除）</button>
     </div>
     ${isOwner()?`<div class="card" style="border:2px solid #06C755">
@@ -10091,6 +10092,19 @@ function resetToExistingData(){
   window._chatReadBasePath = '/chatRead';
   alert('✅ リセットしました！ページを再読み込みしてください。');
   location.reload();
+}
+
+function resetStaffToDefault(){
+  if(!confirm('スタッフ設定をblancher初期設定（shoko/haruka/misa/wakana...）に戻しますか？\n\n現在のスタッフ設定は上書きされます。')) return;
+  // DEFAULT_STAFF_LISTをFirebaseとlocalStorageに保存
+  localStorage.setItem('salon_staffConfig', JSON.stringify(DEFAULT_STAFF_LIST));
+  if(window._fbDB) window._fbDB.ref('/data/staffConfig').set(DEFAULT_STAFF_LIST);
+  // PINもリセット
+  localStorage.removeItem('salon_pins');
+  if(window._fbDB) window._fbDB.ref('/data/pins').set(null);
+  STAFF_LIST = DEFAULT_STAFF_LIST;
+  alert('✅ スタッフをblancher初期設定に戻しました！\n設定画面からPINを再設定してください。');
+  render();
 }
 
 // ============================================================
