@@ -571,11 +571,15 @@ function loadStaffList(){
   return DEFAULT_STAFF_LIST;
 }
 function getEffectiveStaffList(){
-  // FirebaseにstaffConfigがあればそれを使用、なければDEFAULT_STAFF_LISTを保証
   const list = loadStaffList();
-  if(list && list.length > 0) return list;
-  // Firebaseに空のstaffConfigが保存されている場合のフォールバック
-  return DEFAULT_STAFF_LIST;
+  // DEFAULT_STAFF_LISTのスタッフが含まれていなければ追加（blancher保証）
+  const result = list && list.length > 0 ? [...list] : [];
+  DEFAULT_STAFF_LIST.forEach(function(def){
+    if(!result.find(function(s){ return s.id === def.id; })){
+      result.unshift(def);
+    }
+  });
+  return result.length > 0 ? result : DEFAULT_STAFF_LIST;
 }
 let STAFF_LIST = getEffectiveStaffList();
 
