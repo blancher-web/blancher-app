@@ -3133,6 +3133,19 @@ function renderSettings(){
         </div>`).join('')}
       <button class="btn btn-primary btn-block" style="margin-top:14px;background:#2196F3;border-color:#2196F3" onclick="saveStaffMaxOffDays()">💾 保存する</button>
     </div>`:''}
+    ${isOwner()?`<div class="card">
+      <div class="fw-bold mb-12">🏪 店舗名・サロン名の編集</div>
+      <div class="form-group">
+        <label class="form-label">サロン名</label>
+        <input class="form-input" id="set_appname" value="${getAppConfig()?.appName||'Cura'}" placeholder="例: My Nail Salon">
+      </div>
+      ${(getAppConfig()?.stores||[{id:'A',name:'浦和店'},{id:'B',name:'広尾店'}]).map(s=>`
+        <div class="form-group">
+          <label class="form-label">店舗${s.id} の名前</label>
+          <input class="form-input" id="set_store_${s.id}" value="${s.name}" placeholder="例: 表参道店">
+        </div>`).join('')}
+      <button class="btn btn-primary btn-block" onclick="saveStoreNames()">💾 店舗名を保存</button>
+    </div>`:''}
     <div class="card">
       <div class="fw-bold mb-12">⚙️ アプリ設定</div>
       <div class="settings-item">
@@ -3318,7 +3331,7 @@ function renderSettings(){
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <span style="font-size:18px;flex-shrink:0">${DB.getUserIcons()[s.id]||getRank(DB.getPoints()[s.id]||0).char}</span>
             <span style="font-size:13px;font-weight:600;width:70px;flex-shrink:0">${s.name}</span>
-            <input class="form-input" id="lineid_${s.id}" value="${s.lineId||''}" placeholder="Uxxxxxxxxx" style="flex:1;font-size:12px;padding:6px 10px">
+            <input class="form-input" id="lineid_${s.id}" value="${getLineIdForStaff(s.id)||s.lineId||''}" placeholder="Uxxxxxxxxx" style="flex:1;font-size:12px;padding:6px 10px">
           </div>`).join('')}
         <button class="btn btn-block" onclick="saveAllLineIds()" style="background:#06C755;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:700;margin-top:8px">💾 LINE IDを一括保存</button>
       </div>
@@ -3678,14 +3691,19 @@ function saveStaffTargets(){
 }
 
 function saveAllLineIds(){
-  const list = STAFF_LIST.map(function(s){
+  // staffConfigではなく専用パス /data/lineIds に保存（確実・シンプル）
+  const lineIds = {};
+  STAFF_LIST.filter(s=>s.treat).forEach(function(s){
     const input = document.getElementById('lineid_'+s.id);
-    if(input) return Object.assign({}, s, {lineId: input.value.trim()});
-    return s;
+    if(input && input.value.trim()){
+      lineIds[s.id] = input.value.trim();
+    }
   });
-  saveStaffConfig(list);
-  alert('✅ LINE IDを保存しました！');
-  render();
+  // Firebase保存
+  if(window._fbDB) window._fbDB.ref(window._dataPath+'/lineIds').set(lineIds);
+  // localStorage保存
+  localStorage.setItem('salon_lineIds', JSON.stringify(lineIds));
+  alert('✅ LINE IDを保存しました！\nテスト送信で確認してください。');
 }
 
 function saveLineSettings(){
@@ -3738,8 +3756,37 @@ async function sendLineNotification(message, eventId, isTest){
 }
 
 async function getRegisteredLineIds(){
-  // スタッフ設定のlineIdから取得
-  return STAFF_LIST.map(function(s){ return s.lineId; }).filter(Boolean);
+  // /data/lineIds から取得
+  if(window._fbCache && window._fbCache['lineIds']){
+    return Object.values(window._fbCache['lineIds']).filter(Boolean);
+  }
+  try{
+    const local = localStorage.getItem('salon_lineIds');
+    if(local) return Object.values(JSON.parse(local)).filter(Boolean);
+  }catch(e){}
+  return [];
+}
+
+function getLineIdForStaff(staffId){
+  if(window._fbCache && window._fbCache['lineIds']){
+    return window._fbCache['lineIds'][staffId]||'';
+  }
+  try{
+    const local = localStorage.getItem('salon_lineIds');
+    if(local) return (JSON.parse(local)[staffId])||'';
+  }catch(e){}
+  return '';
+}
+function saveStoreNames(){
+  const cfg = getAppConfig()||{};
+  const appName = document.getElementById('set_appname')?.value.trim()||cfg.appName||'Cura';
+  const stores = (cfg.stores||[{id:'A',name:'浦和店'},{id:'B',name:'広尾店'}]).map(function(s){
+    const input = document.getElementById('set_store_'+s.id);
+    return {id:s.id, name:(input?input.value.trim():'')||s.name};
+  });
+  saveAppConfig(Object.assign({}, cfg, {appName, stores}));
+  alert('✅ 店舗名を保存しました！');
+  render();
 }
 
 function saveSettings(){
@@ -3973,8 +4020,13 @@ function renderMessages(){
     ${tab==='sent'?renderSent(sent):''}
     ${tab==='tasks'?renderTaskBoard(taskBoard):''}
 
-    <button class="fab" onclick="showAddMessageModal()">✏️</button>
+    ${canSendMessage()?`<button class="fab" onclick="showAddMessageModal()">✏️</button>`:''}
   </div>`;
+}
+
+function canSendMessage(){
+  // オーナー・taskAdmin・shiftAdminのみ送信可
+  return isOwner()||isTaskAdmin()||isShiftAdmin();
 }
 
 function renderInbox(msgs){
@@ -10234,10 +10286,15 @@ function saveStaffMember(editId){
 }
 
 function deleteStaffMember(id){
-  if(!confirm('このスタッフを削除しますか？')) return;
+  if(id==='shoko'||id==='haruka'){ alert('このスタッフは削除できません'); return; }
+  if(!confirm('このスタッフを完全に削除しますか？')) return;
+  // getEffectiveStaffListの再マージで戻らないよう直接Firebase/localStorageを更新
   const list = STAFF_LIST.filter(s=>s.id!==id);
-  saveStaffConfig(list);
+  localStorage.setItem('salon_staffConfig', JSON.stringify(list));
+  if(window._fbDB) window._fbDB.ref(window._dataPath+'/staffConfig').set(list);
+  STAFF_LIST = list;
   render();
+  alert('✅ 削除しました');
 }
 
 // 退社（inactiveフラグ → データ保持・一覧から非表示）
