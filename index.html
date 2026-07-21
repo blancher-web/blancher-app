@@ -1002,6 +1002,8 @@ function render(){
     case 'spacechat':  try{ app.innerHTML = renderHeaderBack('🗂️ '+(S.spaceId||'')) + renderSpaceChat() + renderBottomNav('chat'); }catch(e){ app.innerHTML='<div class="page"><div class="card" style="color:red">Error: '+e.message+'</div></div>'; } break;
     case 'staff':      app.innerHTML = renderHeaderBack('👤 スタッフ管理') + renderStaff() + renderBottomNav('more'); break;
     case 'settings':   try{ app.innerHTML = renderHeaderBack('⚙️ 設定') + renderSettings() + renderBottomNav('more'); }catch(e){ app.innerHTML='<div class="page"><div class="card" style="color:red">設定エラー: '+e.message+'<br><pre style="font-size:10px">'+e.stack.slice(0,300)+'</pre></div></div>'; } break;
+    case 'lineids':    app.innerHTML = renderHeaderBack('📱 LINE ID登録') + renderLineIds() + renderBottomNav('more'); break;
+    case 'menuEdit':   app.innerHTML = renderHeaderBack('💅 メニュー編集') + renderMenuEditPage() + renderBottomNav('more'); break;
     case 'messages':   app.innerHTML = renderHeader('💬 メッセージ') + renderMessages() + renderBottomNav('messages'); break;
     case 'designs':    app.innerHTML = renderHeader('💅 デザイン共有') + renderDesigns() + renderBottomNav('designs'); break;
     case 'absences':   app.innerHTML = renderHeaderBack('🏥 欠勤・遅刻連絡') + renderAbsences() + renderBottomNav('more'); break;
@@ -3313,15 +3315,15 @@ function renderSettings(){
         3. 上記フォームに入力して「保存」
       </div>
 
-      <!-- LINE ID登録ボタン（モーダル方式） -->
+      <!-- LINE ID登録ボタン（専用ページ） -->
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e0f2e0">
-        <button class="btn btn-block" style="background:#06C755;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:700;font-size:15px" onclick="showLineIdModal()">📱 スタッフのLINE IDを登録する</button>
+        <button class="btn btn-block" style="background:#06C755;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:700;font-size:15px" onclick="go('lineids')">📱 スタッフのLINE IDを登録する</button>
       </div>
     </div>`:''}
     ${isOwner()?`<div class="card" style="border:2px solid #FF9800">
       <div class="fw-bold mb-12">💅 売上メニュー管理</div>
       <div style="font-size:13px;color:var(--mid);margin-bottom:12px">メニュー名の変更・追加・削除ができます</div>
-      <button class="btn btn-block" style="background:#FF9800;color:#fff;border:none;font-weight:700" onclick="showMenuManager()">✏️ メニューを編集する</button>
+      <button class="btn btn-block" style="background:#FF9800;color:#fff;border:none;font-weight:700" onclick="go('menuEdit')">✏️ メニューを編集する</button>
     </div>`:''}
     ${isOwner()?`<div class="card">
       <div class="fw-bold mb-12">💾 データバックアップ・復元</div>
@@ -3766,6 +3768,101 @@ function getLineIdForStaff(staffId){
   var s = STAFF_LIST.find(function(x){ return x.id===staffId; });
   return (s && s.lineId)||'';
 }
+// LINE ID登録専用ページ
+function renderLineIds(){
+  var staff = STAFF_LIST.filter(function(s){ return s.treat; });
+  var h = '<div class="page">';
+  h += '<div class="card">';
+  h += '<div class="fw-bold mb-12">📱 スタッフのLINE ID登録</div>';
+  h += '<div style="font-size:12px;color:var(--mid);margin-bottom:16px">各スタッフがLINE公式アカウントにメッセージを送ると届くLINE IDを入力してください</div>';
+  staff.forEach(function(s){
+    h += '<div class="form-group">';
+    h += '<label class="form-label">'+s.name+'</label>';
+    h += '<input class="form-input" id="lid_'+s.id+'" value="'+(s.lineId||'')+'" placeholder="Uxxxxxxxxxxxxxxxxx">';
+    h += '</div>';
+  });
+  h += '<button class="btn btn-primary btn-block" onclick="saveLineIds()">💾 保存する</button>';
+  h += '</div></div>';
+  return h;
+}
+function saveLineIds(){
+  var updated = STAFF_LIST.map(function(s){
+    var el = document.getElementById('lid_'+s.id);
+    return Object.assign({}, s, {lineId: el ? el.value.trim() : (s.lineId||'')});
+  });
+  localStorage.setItem('salon_staffConfig', JSON.stringify(updated));
+  if(window._fbDB) window._fbDB.ref(window._dataPath+'/staffConfig').set(updated);
+  STAFF_LIST = updated;
+  alert('✅ LINE IDを保存しました！');
+  go('settings');
+}
+
+// メニュー編集専用ページ
+function renderMenuEditPage(){
+  var menus = loadMenus();
+  var editIdx = (S.menuEditCat !== undefined && S.menuEditCat !== null) ? S.menuEditCat : null;
+  var h = '<div class="page">';
+  if(editIdx !== null && menus[editIdx]){
+    var cat = menus[editIdx];
+    h += '<div class="card">';
+    h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">';
+    h += '<button onclick="S.menuEditCat=null;go(\'menuEdit\')" style="background:none;border:none;font-size:22px;cursor:pointer">←</button>';
+    h += '<div class="fw-bold" style="flex:1">'+cat.cat+'</div>';
+    h += '</div>';
+    cat.items.forEach(function(item, i){
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #f5f5f5">';
+      h += '<div style="flex:1">'+item+'</div>';
+      h += '<button onclick="editMenuItemPage('+editIdx+','+i+')" style="background:none;border:1px solid #ddd;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px">✏️</button>';
+      h += '<button onclick="removeMenuItemPage('+editIdx+','+i+')" style="background:none;border:1px solid var(--danger);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px;color:var(--danger)">×</button>';
+      h += '</div>';
+    });
+    h += '<div style="display:flex;gap:8px;margin-top:14px">';
+    h += '<input class="form-input" id="new_item" placeholder="新しい項目名" style="flex:1">';
+    h += '<button class="btn btn-primary btn-sm" onclick="addMenuItemPage('+editIdx+')">追加</button>';
+    h += '</div></div>';
+  } else {
+    h += '<div class="card">';
+    menus.forEach(function(cat, i){
+      h += '<div onclick="S.menuEditCat='+i+';go(\'menuEdit\')" style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f5f5f5;cursor:pointer">';
+      h += '<div style="flex:1"><div class="fw-bold">'+cat.cat+'</div><div style="font-size:12px;color:var(--mid)">'+cat.items.length+'項目</div></div>';
+      h += '<button onclick="event.stopPropagation();removeMenuCatPage('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:4px">🗑</button>';
+      h += '<div style="color:#aaa">›</div></div>';
+    });
+    h += '<div style="display:flex;gap:8px;margin-top:14px">';
+    h += '<input class="form-input" id="new_cat" placeholder="新しいカテゴリ名" style="flex:1">';
+    h += '<button class="btn btn-primary btn-sm" onclick="addMenuCatPage()">追加</button>';
+    h += '</div></div>';
+  }
+  h += '</div>';
+  return h;
+}
+function addMenuCatPage(){
+  var name = (document.getElementById('new_cat')||{}).value;
+  if(!name||!name.trim()) return alert('カテゴリ名を入力してください');
+  var menus = loadMenus(); menus.push({cat:name.trim(), items:[]}); saveMenuConfig(menus); go('menuEdit');
+}
+function removeMenuCatPage(i){
+  if(!confirm('削除しますか？')) return;
+  var menus = loadMenus(); menus.splice(i,1); saveMenuConfig(menus); S.menuEditCat=null; go('menuEdit');
+}
+function addMenuItemPage(catIdx){
+  var name = (document.getElementById('new_item')||{}).value;
+  if(!name||!name.trim()) return alert('項目名を入力してください');
+  var menus = loadMenus(); menus[catIdx].items.push(name.trim()); saveMenuConfig(menus); go('menuEdit');
+}
+function removeMenuItemPage(catIdx, itemIdx){
+  if(!confirm('削除しますか？')) return;
+  var menus = loadMenus(); menus[catIdx].items.splice(itemIdx,1); saveMenuConfig(menus); go('menuEdit');
+}
+function editMenuItemPage(catIdx, itemIdx){
+  var menus = loadMenus();
+  var cur = menus[catIdx].items[itemIdx]||'';
+  var val = prompt('項目名を編集:', cur);
+  if(val===null) return;
+  menus[catIdx].items[itemIdx] = val;
+  saveMenuConfig(menus); go('menuEdit');
+}
+
 function saveStoreNames(){
   const cfg = getAppConfig()||{};
   const appName = document.getElementById('set_appname')?.value.trim()||cfg.appName||'Cura';
