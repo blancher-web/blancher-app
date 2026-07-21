@@ -3305,12 +3305,22 @@ function renderSettings(){
       </div>
       <div style="background:#f0fff4;border-radius:10px;padding:12px;font-size:11px;color:#2d6a4f;line-height:1.8">
         📖 <strong>設定手順：</strong><br>
-        1. <a href="https://developers.worksmobile.com/" style="color:#06C755">developers.worksmobile.com</a> でアプリ作成<br>
-        2. Bot作成 → Bot IDをメモ<br>
-        3. Botをチャンネルに招待 → Channel IDをメモ<br>
-        4. サービスアカウント → Access Token発行<br>
-        5. <a href="https://workers.cloudflare.com/" style="color:#06C755">Cloudflare Workers</a> にコードをデプロイ<br>
-        6. 上記フォームに入力して「保存」
+        1. LINE公式アカウント作成 → linebiz.com<br>
+        2. Cloudflare Workersにコードをデプロイ<br>
+        3. 上記フォームに入力して「保存」
+      </div>
+
+      <!-- LINE ID一括登録 -->
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e0f2e0">
+        <div style="font-weight:700;font-size:13px;color:#2d6a4f;margin-bottom:10px">📱 スタッフのLINE ID一括登録</div>
+        <div style="font-size:11px;color:var(--mid);margin-bottom:10px">スタッフがLINEでメッセージを送ると届いたLINE IDをここに入力してください</div>
+        ${STAFF_LIST.filter(s=>s.treat).map(s=>`
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-size:18px;flex-shrink:0">${DB.getUserIcons()[s.id]||getRank(DB.getPoints()[s.id]||0).char}</span>
+            <span style="font-size:13px;font-weight:600;width:70px;flex-shrink:0">${s.name}</span>
+            <input class="form-input" id="lineid_${s.id}" value="${s.lineId||''}" placeholder="Uxxxxxxxxx" style="flex:1;font-size:12px;padding:6px 10px">
+          </div>`).join('')}
+        <button class="btn btn-block" onclick="saveAllLineIds()" style="background:#06C755;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:700;margin-top:8px">💾 LINE IDを一括保存</button>
       </div>
     </div>`:''}
     ${isOwner()?`<div class="card" style="border:2px solid #FF9800">
@@ -3664,6 +3674,17 @@ function saveStaffTargets(){
   });
   DB.setStaffTargets(targets);
   alert('✅ スタッフ別目標を保存しました！');
+  render();
+}
+
+function saveAllLineIds(){
+  const list = STAFF_LIST.map(function(s){
+    const input = document.getElementById('lineid_'+s.id);
+    if(input) return Object.assign({}, s, {lineId: input.value.trim()});
+    return s;
+  });
+  saveStaffConfig(list);
+  alert('✅ LINE IDを保存しました！');
   render();
 }
 
