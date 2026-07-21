@@ -3681,25 +3681,18 @@ function saveStaffTargets(){
 }
 
 function saveAllLineIds(){
-  // STAFF_LISTのlineIdを直接更新してsaveStaffConfigで保存
   const updated = STAFF_LIST.map(function(s){
     const input = document.getElementById('lineid_'+s.id);
     if(!input) return s;
     return Object.assign({}, s, {lineId: input.value.trim()});
   });
-  // Firebase・localStorageに直接保存（saveStaffConfigを通さない）
   localStorage.setItem('salon_staffConfig', JSON.stringify(updated));
   if(window._fbDB){
-    window._fbDB.ref(window._dataPath+'/staffConfig').set(updated, function(err){
-      if(err) alert('❌ 保存エラー: '+err.message);
-      else alert('✅ LINE IDを保存しました！');
-    });
-  } else {
-    alert('✅ LINE IDをローカルに保存しました');
+    window._fbDB.ref(window._dataPath+'/staffConfig').set(updated);
   }
   STAFF_LIST = updated;
-  window._lineIds = {};
-  updated.forEach(function(s){ if(s.lineId) window._lineIds[s.id]=s.lineId; });
+  alert('✅ LINE IDを保存しました！');
+  render();
 }
 
 function saveLineSettings(){
