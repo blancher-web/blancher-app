@@ -252,6 +252,11 @@ textarea.form-input{resize:vertical;min-height:80px;}
 // blancher: namespace = '' (既存パスそのまま)
 // 新サロン: namespace = 'salons/[code]' (独自パス)
 (function(){
+  // ?reset パラメータでnamespaceをリセット（blancher用）
+  if(location.search.includes('reset')){
+    localStorage.removeItem('salon_ns');
+    history.replaceState(null,'',location.pathname);
+  }
   var savedNs = localStorage.getItem('salon_ns') || '';
   window._salonNs = savedNs;
   // データパス: blancher=='/data', 新サロン=='/salons/[code]/data'
