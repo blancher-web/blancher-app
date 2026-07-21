@@ -297,8 +297,11 @@ textarea.form-input{resize:vertical;min-height:80px;}
     window._fbDB.ref(window._dataPath).on('value', function(snap){
       window._fbCache = snap.val() || {};
       window._fbReady = true;
+      // LINE IDをwindow._lineIdsに反映
+      if(window._fbCache['lineIds']) window._lineIds = window._fbCache['lineIds'];
+      else { try{ var li=localStorage.getItem('salon_lineIds'); if(li) window._lineIds=JSON.parse(li); }catch(e){} }
       // STAFF_LIST・MEMUSをFirebaseから更新
-      if(typeof loadStaffList === 'function') STAFF_LIST = getEffectiveStaffList();
+      if(typeof loadStaffList === 'function') STAFF_LIST = loadStaffList();
       if(typeof loadMenus === 'function') MENUS = loadMenus();
       if(typeof render === 'function' && window._appMounted){
         var page = (typeof S !== 'undefined') ? S.page : '';
@@ -570,18 +573,8 @@ function loadStaffList(){
   }catch(e){}
   return DEFAULT_STAFF_LIST;
 }
-function getEffectiveStaffList(){
-  const list = loadStaffList();
-  // DEFAULT_STAFF_LISTのスタッフが含まれていなければ追加（blancher保証）
-  const result = list && list.length > 0 ? [...list] : [];
-  DEFAULT_STAFF_LIST.forEach(function(def){
-    if(!result.find(function(s){ return s.id === def.id; })){
-      result.unshift(def);
-    }
-  });
-  return result.length > 0 ? result : DEFAULT_STAFF_LIST;
-}
-let STAFF_LIST = getEffectiveStaffList();
+// getEffectiveStaffListは廃止 → loadStaffListのみ使用
+let STAFF_LIST = loadStaffList();
 
 // アプリ設定（サロン名・店舗名）
 function getAppConfig(){
@@ -3691,19 +3684,16 @@ function saveStaffTargets(){
 }
 
 function saveAllLineIds(){
-  // staffConfigではなく専用パス /data/lineIds に保存（確実・シンプル）
-  const lineIds = {};
+  const lineIds = window._lineIds || {};
   STAFF_LIST.filter(s=>s.treat).forEach(function(s){
     const input = document.getElementById('lineid_'+s.id);
-    if(input && input.value.trim()){
-      lineIds[s.id] = input.value.trim();
-    }
+    if(input && input.value.trim()) lineIds[s.id] = input.value.trim();
+    else if(input && !input.value.trim()) delete lineIds[s.id];
   });
-  // Firebase保存
+  window._lineIds = lineIds;
   if(window._fbDB) window._fbDB.ref(window._dataPath+'/lineIds').set(lineIds);
-  // localStorage保存
   localStorage.setItem('salon_lineIds', JSON.stringify(lineIds));
-  alert('✅ LINE IDを保存しました！\nテスト送信で確認してください。');
+  alert('✅ LINE IDを保存しました！');
 }
 
 function saveLineSettings(){
@@ -3756,26 +3746,11 @@ async function sendLineNotification(message, eventId, isTest){
 }
 
 async function getRegisteredLineIds(){
-  // /data/lineIds から取得
-  if(window._fbCache && window._fbCache['lineIds']){
-    return Object.values(window._fbCache['lineIds']).filter(Boolean);
-  }
-  try{
-    const local = localStorage.getItem('salon_lineIds');
-    if(local) return Object.values(JSON.parse(local)).filter(Boolean);
-  }catch(e){}
-  return [];
+  return Object.values(window._lineIds||{}).filter(Boolean);
 }
 
 function getLineIdForStaff(staffId){
-  if(window._fbCache && window._fbCache['lineIds']){
-    return window._fbCache['lineIds'][staffId]||'';
-  }
-  try{
-    const local = localStorage.getItem('salon_lineIds');
-    if(local) return (JSON.parse(local)[staffId])||'';
-  }catch(e){}
-  return '';
+  return (window._lineIds||{})[staffId]||'';
 }
 function saveStoreNames(){
   const cfg = getAppConfig()||{};
@@ -10134,7 +10109,7 @@ function connectWithCode(){
         window._fbDB.ref(window._dataPath).on('value', function(s){
           window._fbCache = s.val()||{};
           window._fbReady = true;
-          STAFF_LIST = getEffectiveStaffList();
+          STAFF_LIST = loadStaffList();
           if(window._appMounted) render();
         });
         S.page='login'; render();
