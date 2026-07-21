@@ -3553,6 +3553,7 @@ function menuCustSave(){
 }
 
 function showMenuManager(){
+  try{
   const menus = loadMenus();
   const editCat = S.menuEditCat !== undefined ? S.menuEditCat : null;
   let html = '<div class="modal-title">💅 売上メニュー管理</div>';
@@ -3594,6 +3595,7 @@ function showMenuManager(){
     html += '</div>';
   }
   showModal(html);
+  }catch(e){ alert('メニューエラー: '+e.message); }
 }
 
 function addMenuCat(){
@@ -3673,17 +3675,19 @@ function saveStaffTargets(){
 }
 
 function showLineIdModal(){
-  var staff = STAFF_LIST.filter(function(s){ return s.treat; });
-  var html = '<div class="modal-title">📱 LINE ID登録</div>';
-  html += '<div style="font-size:12px;color:var(--mid);margin-bottom:14px">各スタッフのLINE IDを入力してください</div>';
-  staff.forEach(function(s){
-    html += '<div class="form-group">';
-    html += '<label class="form-label">'+s.name+'</label>';
-    html += '<input class="form-input" id="mid_'+s.id+'" value="'+(s.lineId||'')+'" placeholder="Uxxxxxxxxxxxxxxxxx">';
-    html += '</div>';
-  });
-  html += '<button class="btn btn-primary btn-block" onclick="saveLineIdModal()">💾 保存する</button>';
-  showModal(html);
+  try{
+    var staff = STAFF_LIST.filter(function(s){ return s.treat; });
+    var html = '<div class="modal-title">📱 LINE ID登録</div>';
+    html += '<div style="font-size:12px;color:var(--mid);margin-bottom:14px">各スタッフのLINE IDを入力してください</div>';
+    staff.forEach(function(s){
+      html += '<div class="form-group">';
+      html += '<label class="form-label">'+s.name+'</label>';
+      html += '<input class="form-input" id="mid_'+s.id+'" value="'+(s.lineId||'')+'" placeholder="Uxxxxxxxxxxxxxxxxx">';
+      html += '</div>';
+    });
+    html += '<button class="btn btn-primary btn-block" onclick="saveLineIdModal()">💾 保存する</button>';
+    showModal(html);
+  }catch(e){ alert('エラー: '+e.message); }
 }
 
 function saveLineIdModal(){
