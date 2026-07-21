@@ -482,6 +482,68 @@ function formatManualBody(body){
 // ※ DEFAULT_STAFF_LIST は空（各サロンがセットアップで自分のスタッフを登録）
 const DEFAULT_STAFF_LIST = [];
 
+// ログイン画面でSTAFF_LISTが空の場合の緊急セットアップ
+function renderEmergencySetup(){
+  return `<div style="min-height:100vh;background:linear-gradient(135deg,var(--pink-l),#fff);display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="width:100%;max-width:380px;background:#fff;border-radius:20px;padding:28px;box-shadow:0 4px 24px rgba(0,0,0,.1)">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:48px">⚙️</div>
+        <div style="font-size:18px;font-weight:800;color:var(--pink-d);margin-top:8px">初期設定が必要です</div>
+        <div style="font-size:13px;color:var(--mid);margin-top:6px">スタッフが登録されていません</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">管理者名（ログインID）</label>
+        <input class="form-input" id="em_name" placeholder="例: shoko">
+      </div>
+      <div class="form-group">
+        <label class="form-label">表示名</label>
+        <input class="form-input" id="em_dispname" placeholder="例: shoko">
+      </div>
+      <div class="form-group">
+        <label class="form-label">PINコード（4桁）</label>
+        <input type="number" class="form-input" id="em_pin" placeholder="1234" maxlength="4">
+      </div>
+      <button class="btn btn-primary btn-block" onclick="emergencyAdminSetup()">🔑 管理者として登録してログイン</button>
+      <div style="margin-top:12px;text-align:center">
+        <button onclick="showSalonCodeEntry()" style="background:none;border:none;color:var(--mid);font-size:13px;cursor:pointer;text-decoration:underline">サロンコードで接続する</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function emergencyAdminSetup(){
+  const name = (document.getElementById('em_name')?.value||'').trim();
+  const dispname = (document.getElementById('em_dispname')?.value||name).trim();
+  const pin = (document.getElementById('em_pin')?.value||'').trim();
+  if(!name){ alert('名前を入力してください'); return; }
+  const cfg = getAppConfig()||{};
+  const stores = cfg.stores||[{id:'A',name:'店舗A'}];
+  const admin = {
+    id: name.toLowerCase().replace(/\s/g,'_'),
+    name: dispname||name,
+    store: 'both',
+    role: 'admin',
+    title: '管理者',
+    treat: false,
+    noSales: true,
+    noRank: true,
+    pin: pin||''
+  };
+  const list = [admin];
+  saveStaffConfig(list);
+  if(pin){
+    const pins = DB.getPins()||{};
+    pins[admin.id] = pin;
+    DB.setPins(pins);
+  }
+  STAFF_LIST = list;
+  S.user = admin;
+  S.store = 'both';
+  S.viewStore = 'A';
+  go('home');
+  alert('✅ 管理者として登録しました！\n設定画面からスタッフを追加してください。');
+}
+
 // ロール正規化（IDへの依存なし・汎用）
 function normalizeStaff(list){
   return list.map(function(s){
@@ -1017,6 +1079,10 @@ function renderBottomNav(active){
   </button>`).join('')}</nav>`;
 }
 function renderLogin(){
+  // スタッフが0人の場合は緊急セットアップ画面
+  if(window._fbReady && STAFF_LIST.length === 0){
+    return renderEmergencySetup();
+  }
   const sel = S._loginStore;
   const cfg = getAppConfig();
   const stores = cfg?.stores || [{id:'A',name:'店舗A'}];
