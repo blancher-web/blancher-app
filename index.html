@@ -3700,10 +3700,8 @@ async function sendLineNotification(message, eventId, isTest){
 }
 
 async function getRegisteredLineIds(){
-  // Firebaseからスタッフが登録したLINE IDを取得
-  if(!window._fbCache) return [];
-  const lineIds = window._fbCache['lineIds']||{};
-  return Object.values(lineIds).filter(Boolean);
+  // スタッフ設定のlineIdから取得
+  return STAFF_LIST.map(function(s){ return s.lineId; }).filter(Boolean);
 }
 
 function saveSettings(){
@@ -10137,6 +10135,9 @@ function showAddStaffModal(editId){
       </select></div>
     <div class="form-group"><label class="form-label">PINコード（4桁）</label>
       <input type="number" class="form-input" id="ns_pin" value="${editing?.pin||''}" placeholder="4桁の数字" maxlength="4"></div>
+    <div class="form-group"><label class="form-label">💬 LINE ID（任意）</label>
+      <input class="form-input" id="ns_lineid" value="${editing?.lineId||''}" placeholder="例: Uxxxxxxxxxxxxxxxxx">
+      <div style="font-size:11px;color:var(--mid);margin-top:3px">LINE公式アカウントに友達追加後、メッセージを送ると表示されます</div></div>
     <button class="btn btn-primary btn-block" onclick="saveStaffMember('${editId||''}')">💾 ${editing?'更新':'追加'}する</button>`);
 }
 
@@ -10150,6 +10151,7 @@ function saveStaffMember(editId){
   const store = document.getElementById('ns_store')?.value||'A';
   const contractor = document.getElementById('ns_contractor')?.value==='1';
   const pin = (document.getElementById('ns_pin')?.value||'').trim();
+  const lineId = (document.getElementById('ns_lineid')?.value||'').trim();
   if(!name){ alert('名前を入力してください'); return; }
   const newStaff = {
     id: editId||id||name.toLowerCase()+'_'+Date.now(),
@@ -10157,7 +10159,8 @@ function saveStaffMember(editId){
     treat: role!=='admin'&&role!=='owner',
     noSales: role==='admin'||role==='owner',
     noRank: role==='admin'||role==='owner',
-    pin: pin||''
+    pin: pin||'',
+    lineId: lineId||''
   };
   let list = [...STAFF_LIST];
   if(editId){
