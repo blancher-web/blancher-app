@@ -3804,6 +3804,8 @@ function renderMenuEditPage(){
   var h = '<div class="page">';
   if(editIdx !== null && menus[editIdx]){
     var cat = menus[editIdx];
+    if(!cat){ S.menuEditCat=null; go('menuEdit'); return h; }
+    if(!cat.items) cat.items = [];
     h += '<div class="card">';
     h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">';
     h += '<button onclick="S.menuEditCat=null;go(\'menuEdit\')" style="background:none;border:none;font-size:22px;cursor:pointer">←</button>';
@@ -3824,7 +3826,9 @@ function renderMenuEditPage(){
     h += '<div class="card">';
     menus.forEach(function(cat, i){
       h += '<div onclick="S.menuEditCat='+i+';go(\'menuEdit\')" style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid #f5f5f5;cursor:pointer">';
-      h += '<div style="flex:1"><div class="fw-bold">'+cat.cat+'</div><div style="font-size:12px;color:var(--mid)">'+cat.items.length+'項目</div></div>';
+      if(!cat||!cat.cat) return;
+      var items = cat.items||[];
+      h += '<div style="flex:1"><div class="fw-bold">'+cat.cat+'</div><div style="font-size:12px;color:var(--mid)">'+items.length+'項目</div></div>';
       h += '<button onclick="event.stopPropagation();removeMenuCatPage('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:4px">🗑</button>';
       h += '<div style="color:#aaa">›</div></div>';
     });
