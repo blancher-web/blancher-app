@@ -297,9 +297,6 @@ textarea.form-input{resize:vertical;min-height:80px;}
     window._fbDB.ref(window._dataPath).on('value', function(snap){
       window._fbCache = snap.val() || {};
       window._fbReady = true;
-      // LINE IDをwindow._lineIdsに反映
-      if(window._fbCache['lineIds']) window._lineIds = window._fbCache['lineIds'];
-      else { try{ var li=localStorage.getItem('salon_lineIds'); if(li) window._lineIds=JSON.parse(li); }catch(e){} }
       // STAFF_LIST・MEMUSをFirebaseから更新
       if(typeof loadStaffList === 'function') STAFF_LIST = loadStaffList();
       if(typeof loadMenus === 'function') MENUS = loadMenus();
@@ -3684,16 +3681,25 @@ function saveStaffTargets(){
 }
 
 function saveAllLineIds(){
-  const lineIds = window._lineIds || {};
-  STAFF_LIST.filter(s=>s.treat).forEach(function(s){
+  // STAFF_LISTのlineIdを直接更新してsaveStaffConfigで保存
+  const updated = STAFF_LIST.map(function(s){
     const input = document.getElementById('lineid_'+s.id);
-    if(input && input.value.trim()) lineIds[s.id] = input.value.trim();
-    else if(input && !input.value.trim()) delete lineIds[s.id];
+    if(!input) return s;
+    return Object.assign({}, s, {lineId: input.value.trim()});
   });
-  window._lineIds = lineIds;
-  if(window._fbDB) window._fbDB.ref(window._dataPath+'/lineIds').set(lineIds);
-  localStorage.setItem('salon_lineIds', JSON.stringify(lineIds));
-  alert('✅ LINE IDを保存しました！');
+  // Firebase・localStorageに直接保存（saveStaffConfigを通さない）
+  localStorage.setItem('salon_staffConfig', JSON.stringify(updated));
+  if(window._fbDB){
+    window._fbDB.ref(window._dataPath+'/staffConfig').set(updated, function(err){
+      if(err) alert('❌ 保存エラー: '+err.message);
+      else alert('✅ LINE IDを保存しました！');
+    });
+  } else {
+    alert('✅ LINE IDをローカルに保存しました');
+  }
+  STAFF_LIST = updated;
+  window._lineIds = {};
+  updated.forEach(function(s){ if(s.lineId) window._lineIds[s.id]=s.lineId; });
 }
 
 function saveLineSettings(){
@@ -3746,11 +3752,12 @@ async function sendLineNotification(message, eventId, isTest){
 }
 
 async function getRegisteredLineIds(){
-  return Object.values(window._lineIds||{}).filter(Boolean);
+  return STAFF_LIST.map(function(s){ return s.lineId; }).filter(Boolean);
 }
 
 function getLineIdForStaff(staffId){
-  return (window._lineIds||{})[staffId]||'';
+  var s = STAFF_LIST.find(function(x){ return x.id===staffId; });
+  return (s && s.lineId)||'';
 }
 function saveStoreNames(){
   const cfg = getAppConfig()||{};
