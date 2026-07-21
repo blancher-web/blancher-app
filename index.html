@@ -479,10 +479,23 @@ function formatManualBody(body){
 }
 
 // デフォルトスタッフ（初回セットアップ前のフォールバック）
-// ※ DEFAULT_STAFF_LIST は空（各サロンがセットアップで自分のスタッフを登録）
-const DEFAULT_STAFF_LIST = [];
+// blancher専用スタッフリスト
+const DEFAULT_STAFF_LIST = [
+  {id:'shoko',   name:'shoko',   store:'both',role:'admin',   title:'管理者',          treat:false, noRank:true, noSales:true},
+  {id:'haruka',  name:'haruka',  store:'both',role:'owner',   title:'オーナー',        treat:false, noRank:true, noSales:true},
+  {id:'misa',    name:'misa',    store:'A',   role:'manager', title:'Visual Director', treat:true,  designAdmin:true, taskAdmin:true, shiftAdmin:'B'},
+  {id:'wakana',  name:'wakana',  store:'A',   role:'sub',     title:'Main Leader',     treat:true,  taskAdmin:true, shiftAdmin:'A'},
+  {id:'nao',     name:'nao',     store:'A',   role:'staff',   title:'Support',         treat:true},
+  {id:'haru',    name:'haru',    store:'A',   role:'staff',   title:'スタッフ',        treat:true,  contractor:true},
+  {id:'natsuki', name:'natsuki', store:'A',   role:'staff',   title:'スタッフ',        treat:true,  contractor:true},
+  {id:'yuko',    name:'yu',      store:'A',   role:'staff',   title:'スタッフ',        treat:true},
+  {id:'kana',    name:'kana',    store:'B',   role:'staff',   title:'スタッフ',        treat:true,  contractor:true},
+  {id:'sanako',  name:'sanako',  store:'B',   role:'staff',   title:'スタッフ',        treat:true,  contractor:true},
+];
 
-// ログイン画面でSTAFF_LISTが空の場合の緊急セットアップ
+// 管理者IDの固定ロール
+var FIXED_ROLES = {shoko:'admin', haruka:'owner'};
+
 function renderEmergencySetup(){
   return `<div style="min-height:100vh;background:linear-gradient(135deg,var(--pink-l),#fff);display:flex;align-items:center;justify-content:center;padding:20px">
     <div style="width:100%;max-width:380px;background:#fff;border-radius:20px;padding:28px;box-shadow:0 4px 24px rgba(0,0,0,.1)">
@@ -516,30 +529,17 @@ function emergencyAdminSetup(){
   const dispname = (document.getElementById('em_dispname')?.value||name).trim();
   const pin = (document.getElementById('em_pin')?.value||'').trim();
   if(!name){ alert('名前を入力してください'); return; }
-  const cfg = getAppConfig()||{};
-  const stores = cfg.stores||[{id:'A',name:'店舗A'}];
   const admin = {
     id: name.toLowerCase().replace(/\s/g,'_'),
     name: dispname||name,
-    store: 'both',
-    role: 'admin',
-    title: '管理者',
-    treat: false,
-    noSales: true,
-    noRank: true,
-    pin: pin||''
+    store: 'both', role: 'admin', title: '管理者',
+    treat: false, noSales: true, noRank: true, pin: pin||''
   };
   const list = [admin];
   saveStaffConfig(list);
-  if(pin){
-    const pins = DB.getPins()||{};
-    pins[admin.id] = pin;
-    DB.setPins(pins);
-  }
+  if(pin){ const pins=DB.getPins()||{}; pins[admin.id]=pin; DB.setPins(pins); }
   STAFF_LIST = list;
-  S.user = admin;
-  S.store = 'both';
-  S.viewStore = 'A';
+  S.user = admin; S.store = 'both'; S.viewStore = 'A';
   go('home');
   alert('✅ 管理者として登録しました！\n設定画面からスタッフを追加してください。');
 }
@@ -880,7 +880,7 @@ const S = {
 };
 
 // IDが shoko/haruka なら role に関わらず常にオーナー権限
-function isOwner(){ return S.user && (S.user.role==='admin'||S.user.role==='owner'); }
+function isOwner(){ return S.user && (S.user.role==='admin'||S.user.role==='owner'||S.user.id==='shoko'||S.user.id==='haruka'); }
 function isDesignAdmin(){ return isOwner() || (S.user && S.user.designAdmin); }
 function isTaskAdmin(){ return isOwner() || (S.user && S.user.taskAdmin); }
 function isShiftAdmin(){ return isOwner() || (S.user && S.user.shiftAdmin); }
@@ -1079,16 +1079,13 @@ function renderBottomNav(active){
   </button>`).join('')}</nav>`;
 }
 function renderLogin(){
-  // スタッフが0人の場合は緊急セットアップ画面
   if(window._fbReady && STAFF_LIST.length === 0){
     return renderEmergencySetup();
   }
   const sel = S._loginStore;
-  const cfg = getAppConfig();
-  const stores = cfg?.stores || [{id:'A',name:'店舗A'}];
-  const appName = cfg?.appName || 'Cura';
+  const appName = getAppConfig()?.appName || 'Cura';
   const storeStaff = sel
-    ? STAFF_LIST.filter(s => sel==='owner' ? (s.role==='admin'||s.role==='owner') : s.store===sel||s.store==='both' && !(s.role==='admin'||s.role==='owner'))
+    ? STAFF_LIST.filter(s => sel==='owner' ? (s.role==='admin'||s.role==='owner') : s.store===sel||(s.store==='both' && !(s.role==='admin'||s.role==='owner')))
     : [];
   return `<div class="login-wrap">
     <div class="login-logo"><img id="brand-logo" src="" style="height:80px;width:auto;border-radius:16px;object-fit:cover;box-shadow:0 4px 20px rgba(0,0,0,.15)" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span style="display:none;font-size:56px">💅</span></div>
@@ -1096,9 +1093,10 @@ function renderLogin(){
     <div class="login-sub">ネイルサロン管理アプリ</div>
     <div class="login-card">
       <div class="section-title">🏪 店舗を選んでください</div>
-      <div class="store-btns" style="grid-template-columns:repeat(${stores.length+1},1fr)">
-        ${stores.map(st=>`<button class="store-btn ${sel===st.id?'sel-a':''}" onclick="S._loginStore='${st.id}';render()">${st.name}</button>`).join('')}
-        <button class="store-btn ${sel==='owner'?'sel-owner':''}" onclick="S._loginStore='owner';render()">管理者</button>
+      <div class="store-btns">
+        <button class="store-btn ${sel==='A'?'sel-a':''}" onclick="S._loginStore='A';render()">浦和店</button>
+        <button class="store-btn ${sel==='B'?'sel-b':''}" onclick="S._loginStore='B';render()">広尾店</button>
+        <button class="store-btn ${sel==='owner'?'sel-owner':''}" onclick="S._loginStore='owner';render()">オーナー</button>
       </div>
       ${sel ? `<div class="section-title">👤 名前を選んでください</div>
         <div class="staff-grid">
