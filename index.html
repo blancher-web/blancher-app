@@ -298,7 +298,7 @@ textarea.form-input{resize:vertical;min-height:80px;}
       window._fbCache = snap.val() || {};
       window._fbReady = true;
       // STAFF_LIST・MEMUSをFirebaseから更新
-      if(typeof loadStaffList === 'function') STAFF_LIST = loadStaffList();
+      if(typeof loadStaffList === 'function') STAFF_LIST = getEffectiveStaffList();
       if(typeof loadMenus === 'function') MENUS = loadMenus();
       if(typeof render === 'function' && window._appMounted){
         var page = (typeof S !== 'undefined') ? S.page : '';
@@ -570,7 +570,14 @@ function loadStaffList(){
   }catch(e){}
   return DEFAULT_STAFF_LIST;
 }
-let STAFF_LIST = loadStaffList();
+function getEffectiveStaffList(){
+  // FirebaseにstaffConfigがあればそれを使用、なければDEFAULT_STAFF_LISTを保証
+  const list = loadStaffList();
+  if(list && list.length > 0) return list;
+  // Firebaseに空のstaffConfigが保存されている場合のフォールバック
+  return DEFAULT_STAFF_LIST;
+}
+let STAFF_LIST = getEffectiveStaffList();
 
 // アプリ設定（サロン名・店舗名）
 function getAppConfig(){
@@ -10049,7 +10056,7 @@ function connectWithCode(){
         window._fbDB.ref(window._dataPath).on('value', function(s){
           window._fbCache = s.val()||{};
           window._fbReady = true;
-          STAFF_LIST = loadStaffList();
+          STAFF_LIST = getEffectiveStaffList();
           if(window._appMounted) render();
         });
         S.page='login'; render();
