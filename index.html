@@ -3313,17 +3313,9 @@ function renderSettings(){
         3. 上記フォームに入力して「保存」
       </div>
 
-      <!-- LINE ID一括登録 -->
+      <!-- LINE ID登録ボタン（モーダル方式） -->
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid #e0f2e0">
-        <div style="font-weight:700;font-size:13px;color:#2d6a4f;margin-bottom:10px">📱 スタッフのLINE ID一括登録</div>
-        <div style="font-size:11px;color:var(--mid);margin-bottom:10px">スタッフがLINEでメッセージを送ると届いたLINE IDをここに入力してください</div>
-        ${STAFF_LIST.filter(s=>s.treat).map(s=>`
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-            <span style="font-size:18px;flex-shrink:0">${DB.getUserIcons()[s.id]||getRank(DB.getPoints()[s.id]||0).char}</span>
-            <span style="font-size:13px;font-weight:600;width:70px;flex-shrink:0">${s.name}</span>
-            <input class="form-input" id="lineid_${s.id}" value="${getLineIdForStaff(s.id)||s.lineId||''}" placeholder="Uxxxxxxxxx" style="flex:1;font-size:12px;padding:6px 10px">
-          </div>`).join('')}
-        <button class="btn btn-block" onclick="saveAllLineIds()" style="background:#06C755;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:700;margin-top:8px">💾 LINE IDを一括保存</button>
+        <button class="btn btn-block" style="background:#06C755;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:700;font-size:15px" onclick="showLineIdModal()">📱 スタッフのLINE IDを登録する</button>
       </div>
     </div>`:''}
     ${isOwner()?`<div class="card" style="border:2px solid #FF9800">
@@ -3680,19 +3672,37 @@ function saveStaffTargets(){
   render();
 }
 
-function saveAllLineIds(){
-  const updated = STAFF_LIST.map(function(s){
-    const input = document.getElementById('lineid_'+s.id);
+function showLineIdModal(){
+  var staff = STAFF_LIST.filter(function(s){ return s.treat; });
+  var html = '<div class="modal-title">📱 LINE ID登録</div>';
+  html += '<div style="font-size:12px;color:var(--mid);margin-bottom:14px">各スタッフのLINE IDを入力してください</div>';
+  staff.forEach(function(s){
+    html += '<div class="form-group">';
+    html += '<label class="form-label">'+s.name+'</label>';
+    html += '<input class="form-input" id="mid_'+s.id+'" value="'+(s.lineId||'')+'" placeholder="Uxxxxxxxxxxxxxxxxx">';
+    html += '</div>';
+  });
+  html += '<button class="btn btn-primary btn-block" onclick="saveLineIdModal()">💾 保存する</button>';
+  showModal(html);
+}
+
+function saveLineIdModal(){
+  var staff = STAFF_LIST.filter(function(s){ return s.treat; });
+  var updated = STAFF_LIST.map(function(s){
+    var input = document.getElementById('mid_'+s.id);
     if(!input) return s;
-    return Object.assign({}, s, {lineId: input.value.trim()});
+    var val = input.value.trim();
+    return Object.assign({}, s, {lineId: val});
   });
   localStorage.setItem('salon_staffConfig', JSON.stringify(updated));
-  if(window._fbDB){
-    window._fbDB.ref(window._dataPath+'/staffConfig').set(updated);
-  }
+  if(window._fbDB) window._fbDB.ref(window._dataPath+'/staffConfig').set(updated);
   STAFF_LIST = updated;
+  closeModal();
   alert('✅ LINE IDを保存しました！');
-  render();
+}
+
+function saveAllLineIds(){
+  showLineIdModal();
 }
 
 function saveLineSettings(){
