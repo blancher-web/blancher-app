@@ -3761,12 +3761,15 @@ async function sendLineNotification(message, eventId, isTest){
 }
 
 async function getRegisteredLineIds(){
-  return STAFF_LIST.map(function(s){ return s.lineId; }).filter(Boolean);
+  var li = (window._fbCache&&window._fbCache['lineIds'])||{};
+  try{ var loc=JSON.parse(localStorage.getItem('salon_lineIds')||'{}'); Object.assign(li,loc); }catch(e){}
+  return Object.values(li).filter(Boolean);
 }
-
 function getLineIdForStaff(staffId){
-  var s = STAFF_LIST.find(function(x){ return x.id===staffId; });
-  return (s && s.lineId)||'';
+  if(!staffId) return '';
+  var li = (window._fbCache&&window._fbCache['lineIds'])||{};
+  if(li[staffId]) return li[staffId];
+  try{ var loc=JSON.parse(localStorage.getItem('salon_lineIds')||'{}'); return loc[staffId]||''; }catch(e){ return ''; }
 }
 // LINE ID登録専用ページ
 function renderLineIds(){
@@ -3786,13 +3789,14 @@ function renderLineIds(){
   return h;
 }
 function saveLineIds(){
-  var updated = STAFF_LIST.map(function(s){
+  var lineIds = {};
+  STAFF_LIST.filter(function(s){ return s.treat; }).forEach(function(s){
     var el = document.getElementById('lid_'+s.id);
-    return Object.assign({}, s, {lineId: el ? el.value.trim() : (s.lineId||'')});
+    if(el && el.value.trim()) lineIds[s.id] = el.value.trim();
   });
-  localStorage.setItem('salon_staffConfig', JSON.stringify(updated));
-  if(window._fbDB) window._fbDB.ref(window._dataPath+'/staffConfig').set(updated);
-  STAFF_LIST = updated;
+  // staffConfigとは完全に独立したパスに保存
+  if(window._fbDB) window._fbDB.ref(window._dataPath+'/lineIds').set(lineIds);
+  localStorage.setItem('salon_lineIds', JSON.stringify(lineIds));
   alert('✅ LINE IDを保存しました！');
   go('settings');
 }
@@ -10331,8 +10335,8 @@ function showAddStaffModal(editId){
     <div class="form-group"><label class="form-label">PINコード（4桁）</label>
       <input type="number" class="form-input" id="ns_pin" value="${editing?.pin||''}" placeholder="4桁の数字" maxlength="4"></div>
     <div class="form-group"><label class="form-label">💬 LINE ID（任意）</label>
-      <input class="form-input" id="ns_lineid" value="${editing?.lineId||''}" placeholder="例: Uxxxxxxxxxxxxxxxxx">
-      <div style="font-size:11px;color:var(--mid);margin-top:3px">LINE公式アカウントに友達追加後、メッセージを送ると表示されます</div></div>
+      <input class="form-input" id="ns_lineid" value="${getLineIdForStaff(editing?.id||'')||editing?.lineId||''}" placeholder="例: Uxxxxxxxxxxxxxxxxx">
+      <div style="font-size:11px;color:var(--mid);margin-top:3px">LINE公式アカウントにメッセージを送ると届きます</div></div>
     <button class="btn btn-primary btn-block" onclick="saveStaffMember('${editId||''}')">💾 ${editing?'更新':'追加'}する</button>`);
 }
 
@@ -10348,14 +10352,13 @@ function saveStaffMember(editId){
   const pin = (document.getElementById('ns_pin')?.value||'').trim();
   const lineId = (document.getElementById('ns_lineid')?.value||'').trim();
   if(!name){ alert('名前を入力してください'); return; }
+  const staffId = editId||id||name.toLowerCase()+'_'+Date.now();
   const newStaff = {
-    id: editId||id||name.toLowerCase()+'_'+Date.now(),
-    name, role, title, store, contractor,
+    id: staffId, name, role, title, store, contractor,
     treat: role!=='admin'&&role!=='owner',
     noSales: role==='admin'||role==='owner',
     noRank: role==='admin'||role==='owner',
-    pin: pin||'',
-    lineId: lineId||''
+    pin: pin||''
   };
   let list = [...STAFF_LIST];
   if(editId){
@@ -10366,13 +10369,16 @@ function saveStaffMember(editId){
   }
   saveStaffConfig(list);
   // PIN保存
-  if(pin){
-    const pins = DB.getPins()||{};
-    pins[newStaff.id] = pin;
-    DB.setPins(pins);
+  if(pin){ const pins=DB.getPins()||{}; pins[staffId]=pin; DB.setPins(pins); }
+  // LINE IDは独立したパスに保存（staffConfigとは分離）
+  if(lineId){
+    if(window._fbDB) window._fbDB.ref(window._dataPath+'/lineIds/'+staffId).set(lineId);
+    var li = JSON.parse(localStorage.getItem('salon_lineIds')||'{}');
+    li[staffId] = lineId;
+    localStorage.setItem('salon_lineIds', JSON.stringify(li));
   }
   closeModal(); render();
-  alert('✅ '+(editId?'更新':'追加')+'しました！');
+  alert('✅ '+(editId?'更新':'追加')+'しました！'+(lineId?' LINE IDも保存しました。':''));
 }
 
 function deleteStaffMember(id){
