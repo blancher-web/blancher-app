@@ -3773,15 +3773,19 @@ function getLineIdForStaff(staffId){
 }
 // LINE ID登録専用ページ
 function renderLineIds(){
-  var staff = STAFF_LIST.filter(function(s){ return s.treat; });
+  // 全スタッフ（オーナー含む）表示
+  var staff = STAFF_LIST;
+  var savedIds = (window._fbCache&&window._fbCache['lineIds'])||{};
+  try{ var loc=JSON.parse(localStorage.getItem('salon_lineIds')||'{}'); Object.assign(savedIds,loc); }catch(e){}
   var h = '<div class="page">';
   h += '<div class="card">';
-  h += '<div class="fw-bold mb-12">📱 スタッフのLINE ID登録</div>';
-  h += '<div style="font-size:12px;color:var(--mid);margin-bottom:16px">各スタッフがLINE公式アカウントにメッセージを送ると届くLINE IDを入力してください</div>';
+  h += '<div class="fw-bold mb-12">📱 LINE ID登録（全スタッフ）</div>';
+  h += '<div style="font-size:12px;color:var(--mid);margin-bottom:16px">LINE公式アカウントにメッセージを送ると届くIDを入力してください</div>';
   staff.forEach(function(s){
+    var saved = savedIds[s.id]||'';
     h += '<div class="form-group">';
-    h += '<label class="form-label">'+s.name+'</label>';
-    h += '<input class="form-input" id="lid_'+s.id+'" value="'+(s.lineId||'')+'" placeholder="Uxxxxxxxxxxxxxxxxx">';
+    h += '<label class="form-label">'+s.name+'<span style="font-size:10px;color:var(--mid);margin-left:6px">'+s.title+'</span>'+(saved?'<span style="font-size:10px;color:var(--success);margin-left:6px">✅ 登録済</span>':'')+'</label>';
+    h += '<input class="form-input" id="lid_'+s.id+'" value="'+saved+'" placeholder="Uxxxxxxxxxxxxxxxxx">';
     h += '</div>';
   });
   h += '<button class="btn btn-primary btn-block" onclick="saveLineIds()">💾 保存する</button>';
@@ -3789,14 +3793,18 @@ function renderLineIds(){
   return h;
 }
 function saveLineIds(){
-  var lineIds = {};
-  STAFF_LIST.filter(function(s){ return s.treat; }).forEach(function(s){
+  // 既存のIDを読み込んでマージ
+  var existing = (window._fbCache&&window._fbCache['lineIds'])||{};
+  try{ var loc=JSON.parse(localStorage.getItem('salon_lineIds')||'{}'); Object.assign(existing,loc); }catch(e){}
+  STAFF_LIST.forEach(function(s){
     var el = document.getElementById('lid_'+s.id);
-    if(el && el.value.trim()) lineIds[s.id] = el.value.trim();
+    if(!el) return;
+    var val = el.value.trim();
+    if(val) existing[s.id] = val;
+    else delete existing[s.id];
   });
-  // staffConfigとは完全に独立したパスに保存
-  if(window._fbDB) window._fbDB.ref(window._dataPath+'/lineIds').set(lineIds);
-  localStorage.setItem('salon_lineIds', JSON.stringify(lineIds));
+  if(window._fbDB) window._fbDB.ref(window._dataPath+'/lineIds').set(existing);
+  localStorage.setItem('salon_lineIds', JSON.stringify(existing));
   alert('✅ LINE IDを保存しました！');
   go('settings');
 }
