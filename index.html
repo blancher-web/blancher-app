@@ -3811,7 +3811,6 @@ function renderLineIds(){
   return h;
 }
 function saveLineIds(){
-  // 既存のIDを読み込んでマージ
   var existing = (window._fbCache&&window._fbCache['lineIds'])||{};
   try{ var loc=JSON.parse(localStorage.getItem('salon_lineIds')||'{}'); Object.assign(existing,loc); }catch(e){}
   STAFF_LIST.forEach(function(s){
@@ -3821,9 +3820,22 @@ function saveLineIds(){
     if(val) existing[s.id] = val;
     else delete existing[s.id];
   });
-  if(window._fbDB) window._fbDB.ref(window._dataPath+'/lineIds').set(existing);
+  // localStorage には必ず保存
   localStorage.setItem('salon_lineIds', JSON.stringify(existing));
-  alert('✅ LINE IDを保存しました！');
+  
+  if(window._fbDB){
+    // Firebaseにも保存（コールバックで結果確認）
+    window._fbDB.ref(window._dataPath+'/lineIds').set(existing, function(error){
+      if(error){
+        alert('⚠️ Firebase保存エラー: ' + error.message + '\n\nローカルには保存しました。通知テストを行ってください。');
+      } else {
+        var count = Object.keys(existing).length;
+        alert('✅ LINE IDをFirebaseに保存しました！\n登録件数: ' + count + '件\n\nLINEでメッセージを送ると「登録済み」と表示されるようになります。');
+      }
+    });
+  } else {
+    alert('⚠️ Firebase未接続のためローカルのみ保存しました\n通知が届かない場合はオンラインで再保存してください。');
+  }
   go('settings');
 }
 
