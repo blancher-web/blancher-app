@@ -4323,6 +4323,9 @@ function saveMessage(){
   const list=DB.getMessages();
   list.unshift({id:genId(),title,body,deadline,to,toStore,toId,toName,date:today(),from:S.user?.id||'',fromName:S.user?.name||'',readBy:[S.user?.id||''],progress});
   DB.set('messages',list);
+  // LINE通知
+  const toLabel = to==='all'?'全員':toName||toStore+'店';
+  sendLineNotification('📩【タスク・メッセージ】\n差出人: '+S.user?.name+'\n宛先: '+toLabel+'\n\n'+title, 'ln_message');
   closeModal();
   alert('📨 送信しました！');
   render();
@@ -5149,6 +5152,8 @@ function submitAbsence(){
     createdAt:timeStr
   });
   DB.set('absences',list);
+  // LINE通知
+  sendLineNotification('🏥【'+type+'連絡】\n'+S.user.name+'さん\n時間: '+(time||timeStr)+'\n理由: '+(reason||'なし'), 'ln_absence');
   alert(`✅ ${type}の連絡を送りました`);
   render();
 }
@@ -8112,6 +8117,8 @@ function shareShiftToOwner(store, year, month){
   });
 
   DB.set('messages',msgs);
+  // LINE通知
+  sendLineNotification('📅【シフト共有】\n'+year+'年'+month+'月 '+storeName+'\n'+S.user?.name+'さんから確認依頼が届いています。\nアプリのメッセージで確認してください。', 'ln_shift');
   alert('✅ '+owners.map(s=>s.name).join('・')+'さんにシフトを共有しました！\nメッセージ画面で確認できます。');
   render();
 }
