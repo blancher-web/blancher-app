@@ -1309,6 +1309,7 @@ function renderHome(){
       <div style="font-size:13px;color:var(--mid)">${dateStr}</div>
       <div style="font-size:22px;font-weight:800;color:var(--pink-d);margin-top:4px">おはようございます！${S.user.name}さん</div>
       <div style="font-size:11px;color:#aaa;margin-top:2px">ログイン中: ${S.user.name}（${S.user.role||'不明'}）/ ID: ${S.user.id}</div>
+      ${S.user.id==='shoko'?`<div style="font-size:10px;color:${window._fbReady?'var(--success)':'var(--danger)'};margin-top:2px">Firebase: ${window._fbReady?'✅ 接続済':'❌ 未接続'} / データ: ${Object.keys(window._fbCache||{}).length}項目</div>`:''}
     </div>
 
     <!-- オーナー クイックアクセス -->
