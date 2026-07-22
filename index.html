@@ -3729,34 +3729,47 @@ function saveLineSettings(){
 }
 
 function testLineNotification(){
-  sendLineNotification('🔔 Curaからのテスト通知です！\n個人LINE連携が正常に完了しました ✅', null, true).then(function(ok){
-    if(ok) alert('✅ テスト送信成功！LINEを確認してください。');
-    else alert('❌ 送信失敗。Worker URLとアクセストークンを確認してください。');
+  const cfg = DB.getSettings();
+  // 設定チェック
+  if(!cfg.lineWorkerUrl){ alert('❌ Worker URLが設定されていません\n⚙️設定 → LINE個人通知設定で入力してください'); return; }
+  if(!cfg.lineToken){ alert('❌ アクセストークンが設定されていません\n⚙️設定 → LINE個人通知設定で入力してください'); return; }
+  
+  getRegisteredLineIds().then(function(ids){
+    if(!ids.length){
+      alert('❌ LINE IDが登録されていません\n⚙️設定 → 📱スタッフのLINE IDを登録するから登録してください');
+      return;
+    }
+    // 自分のLINE IDを優先
+    const myId = ids[0];
+    fetch(cfg.lineWorkerUrl+'/notify', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({token: cfg.lineToken, lineUserId: myId, message:'🔔 Curaからのテスト通知！\nLINE連携が正常に動作しています ✅'})
+    }).then(function(res){
+      if(res.ok) alert('✅ テスト送信成功！\nLINEを確認してください。\n\n送信先ID: '+myId.slice(0,10)+'...');
+      else res.text().then(function(t){ alert('❌ Worker返却エラー\nステータス: '+res.status+'\n'+t.slice(0,100)); });
+    }).catch(function(e){
+      alert('❌ ネットワークエラー\nWorker URLを確認してください\n\n'+e.message);
+    });
   });
 }
 
 async function sendLineNotification(message, eventId, isTest){
-  const cfg = DB.getSettings();
-  const workerUrl = cfg.lineWorkerUrl;
-  const token     = cfg.lineToken;
-  const events    = cfg.lineEvents||{};
-  if(!workerUrl||!token) return false;
-  if(eventId && events[eventId]===false) return false;
-
-  // Firebase から登録済みのLINE IDを取得
-  const lineIds = await getRegisteredLineIds();
-  if(!lineIds.length && !isTest) return false;
-
   try{
-    const endpoint = isTest ? workerUrl+'/notify' : workerUrl+'/broadcast';
-    const body = isTest
-      ? {token, lineUserId: lineIds[0]||'test', message}
-      : {token, lineIds, message};
+    const cfg = DB.getSettings();
+    const workerUrl = cfg.lineWorkerUrl;
+    const token = cfg.lineToken;
+    if(!workerUrl||!token) return false;
+    const events = cfg.lineEvents||{};
+    if(eventId && events[eventId]===false) return false;
 
-    const res = await fetch(endpoint, {
+    const lineIds = await getRegisteredLineIds();
+    if(!lineIds.length) return false;
+
+    const res = await fetch(workerUrl+'/broadcast', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(body)
+      body: JSON.stringify({token, lineIds, message})
     });
     return res.ok;
   }catch(e){
