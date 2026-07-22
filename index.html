@@ -286,100 +286,93 @@ textarea.form-input{resize:vertical;min-height:80px;}
     window._fbDB = firebase.database();
     window._fbAuth = firebase.auth();
 
-    // 匿名認証（アプリを開いた人だけがアクセス可能）
+    // 匿名認証完了後にFirebaseリスナーを設定
     window._fbAuth.signInAnonymously().then(function(){
       console.log('Firebase auth OK');
+
+      // 全データのリアルタイムリスナー
+      window._fbDB.ref(window._dataPath).on('value', function(snap){
+        window._fbCache = snap.val() || {};
+        window._fbReady = true;
+        if(typeof loadStaffList === 'function') STAFF_LIST = loadStaffList();
+        if(typeof loadMenus === 'function') MENUS = loadMenus();
+        if(typeof render === 'function' && window._appMounted){
+          var page = (typeof S !== 'undefined') ? S.page : '';
+          if(page !== 'chat') render();
+        }
+        if(typeof applyLogo === 'function') applyLogo();
+      });
+
+      // チャットリスナー
+      ['all','A','B'].forEach(function(room){
+        window._fbDB.ref(window._chatsBasePath+'/'+room).limitToLast(200).on('value', function(snap){
+          window._fbChats[room] = snap.val() || {};
+          if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'chat'){
+            var box = document.getElementById('chatBox');
+            var atBottom = box ? (box.scrollHeight - box.scrollTop - box.clientHeight < 60) : true;
+            render();
+            if(atBottom){ setTimeout(function(){ var b=document.getElementById('chatBox'); if(b) b.scrollTop=b.scrollHeight; },50); }
+          }
+        });
+        window._fbDB.ref(window._reactionsBasePath+'/'+room).on('value', function(snap){
+          window._fbReactions[room] = snap.val() || {};
+          if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined'){
+            if(S.page === 'chat' || (S.page === 'management' && S.mgmtTab==='chat')) render();
+          }
+        });
+      });
+
+      // ピン留め・既読リスナー
+      window._fbPinned = {};
+      window._fbChatRead = {};
+      ['all','A','B','mgmt'].forEach(function(room){
+        window._fbDB.ref(window._pinnedBasePath+'/'+room).on('value', function(snap){
+          window._fbPinned[room] = snap.val() || null;
+          if(typeof render==='function'&&window._appMounted&&typeof S!=='undefined'&&S.page==='chat') render();
+        });
+        window._fbDB.ref(window._chatReadBasePath+'/'+room).on('value', function(snap){
+          window._fbChatRead[room] = snap.val() || {};
+        });
+      });
+
+      // マネジメントチャット
+      window._fbChats['mgmt'] = window._fbChats['mgmt'] || {};
+      window._fbDB.ref(window._chatsBasePath+'/mgmt').limitToLast(200).on('value', function(snap){
+        window._fbChats['mgmt'] = snap.val() || {};
+        if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'management' && S.mgmtTab==='chat') render();
+      });
+      window._fbDB.ref(window._reactionsBasePath+'/mgmt').on('value', function(snap){
+        window._fbReactions['mgmt'] = snap.val() || {};
+        if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'management' && S.mgmtTab==='chat') render();
+      });
+
+      // localStorage→Firebaseの初回マイグレーション
+      window._fbDB.ref(window._dataPath).once('value').then(function(snap){
+        if(snap.val()) return;
+        var data = {};
+        for(var i=0;i<localStorage.length;i++){
+          var k = localStorage.key(i);
+          if(k && k.startsWith('salon_')){
+            var fbKey = k.replace('salon_','');
+            try{ data[fbKey] = JSON.parse(localStorage.getItem(k)); }catch(e){}
+          }
+        }
+        if(Object.keys(data).length > 0) window._fbDB.ref(window._dataPath).set(data);
+        ['all','A','B'].forEach(function(room){
+          var cd = localStorage.getItem('chat_'+room);
+          if(!cd) return;
+          try{
+            var msgs = JSON.parse(cd)||[];
+            msgs.forEach(function(msg){ msg.ts = msg.ts||Date.now(); window._fbDB.ref(window._chatsBasePath+'/'+room).push(msg); });
+          }catch(e){}
+        });
+      });
+
     }).catch(function(e){
       console.warn('Auth error:', e.message);
-    });
-
-    // 全データのリアルタイムリスナー
-    window._fbDB.ref(window._dataPath).on('value', function(snap){
-      window._fbCache = snap.val() || {};
+      // 認証失敗時はローカルデータで起動
       window._fbReady = true;
-      // STAFF_LIST・MEMUSをFirebaseから更新
-      if(typeof loadStaffList === 'function') STAFF_LIST = loadStaffList();
-      if(typeof loadMenus === 'function') MENUS = loadMenus();
-      if(typeof render === 'function' && window._appMounted){
-        var page = (typeof S !== 'undefined') ? S.page : '';
-        if(page !== 'chat') render();
-      }
-      // ロゴをリアルタイム反映
-      if(typeof applyLogo === 'function') applyLogo();
-    });
-
-    // チャットのリアルタイムリスナー（ルーム別）
-    ['all','A','B'].forEach(function(room){
-      window._fbDB.ref(window._chatsBasePath+'/'+room).limitToLast(200).on('value', function(snap){
-        window._fbChats[room] = snap.val() || {};
-        if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'chat'){
-          var box = document.getElementById('chatBox');
-          var atBottom = box ? (box.scrollHeight - box.scrollTop - box.clientHeight < 60) : true;
-          render();
-          if(atBottom){ setTimeout(function(){ var b=document.getElementById('chatBox'); if(b) b.scrollTop=b.scrollHeight; },50); }
-        }
-      });
-      // リアクションのリアルタイムリスナー
-      window._fbDB.ref(window._reactionsBasePath+'/'+room).on('value', function(snap){
-        window._fbReactions[room] = snap.val() || {};
-        if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined'){
-          if(S.page === 'chat' || (S.page === 'management' && S.mgmtTab==='chat')) render();
-        }
-      });
-    });
-
-    // ピン留め・既読リスナー
-    window._fbPinned = {};
-    window._fbChatRead = {};
-    ['all','A','B','mgmt'].forEach(function(room){
-      window._fbDB.ref(window._pinnedBasePath+'/'+room).on('value', function(snap){
-        window._fbPinned[room] = snap.val() || null;
-        if(typeof render==='function'&&window._appMounted&&typeof S!=='undefined'&&S.page==='chat') render();
-      });
-      window._fbDB.ref(window._chatReadBasePath+'/'+room).on('value', function(snap){
-        window._fbChatRead[room] = snap.val() || {};
-      });
-    });
-
-    // マネジメント専用チャットのリアルタイムリスナー
-    window._fbChats['mgmt'] = window._fbChats['mgmt'] || {};
-    window._fbDB.ref(window._chatsBasePath+'/mgmt').limitToLast(200).on('value', function(snap){
-      window._fbChats['mgmt'] = snap.val() || {};
-      if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'management' && S.mgmtTab==='chat'){
-        render();
-      }
-    });
-    // マネジメントチャットのリアクションリスナー
-    window._fbDB.ref(window._reactionsBasePath+'/mgmt').on('value', function(snap){
-      window._fbReactions['mgmt'] = snap.val() || {};
-      if(typeof render === 'function' && window._appMounted && typeof S !== 'undefined' && S.page === 'management' && S.mgmtTab==='chat'){
-        render();
-      }
-    });
-
-    // localStorage→Firebaseの初回マイグレーション
-    window._fbDB.ref(window._dataPath).once('value').then(function(snap){
-      if(snap.val()) return; // すでにデータあり
-      var data = {};
-      for(var i=0;i<localStorage.length;i++){
-        var k = localStorage.key(i);
-        if(k && k.startsWith('salon_')){
-          var fbKey = k.replace('salon_','');
-          try{ data[fbKey] = JSON.parse(localStorage.getItem(k)); }catch(e){}
-        }
-      }
-      if(Object.keys(data).length > 0){
-        window._fbDB.ref(window._dataPath).set(data);
-      }
-      // チャットも移行
-      ['all','A','B'].forEach(function(room){
-        var cd = localStorage.getItem('chat_'+room);
-        if(!cd) return;
-        try{
-          var msgs = JSON.parse(cd)||[];
-          msgs.forEach(function(msg){ msg.ts = msg.ts||Date.now(); window._fbDB.ref(window._chatsBasePath+'/'+room).push(msg); });
-        }catch(e){}
-      });
+      if(typeof render === 'function' && window._appMounted) render();
     });
 
   } catch(e){ console.error('Firebase init error:', e); window._fbReady = true; }
