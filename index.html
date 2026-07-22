@@ -7769,18 +7769,38 @@ function sendChat(room){
     };
     window._replyTo = null;
   }
-  // @メンション通知
+  // @メンション通知（アプリ内 + LINE）
   const mentions = (text.match(/@(\S+)/g)||[]).map(m=>m.slice(1));
-  if(mentions.length && window._fbDB){
+  if(mentions.length){
     const mentioned = STAFF_LIST.filter(s=>mentions.includes(s.name));
     mentioned.forEach(s=>{
       if(s.id===S.user?.id) return;
-      const msgs2 = DB.getMessages()||[];
-      msgs2.unshift({id:genId(),title:'💬 @メンション: '+S.user?.name+'さんからメッセージ',
-        body:text,from:S.user?.id,fromName:S.user?.name,
-        to:'individual',toId:s.id,toName:s.name,
-        date:today(),readBy:[],progress:{[s.id]:'未対応'}});
-      DB.set('messages', msgs2);
+      // アプリ内通知
+      if(window._fbDB){
+        const msgs2 = DB.getMessages()||[];
+        msgs2.unshift({id:genId(),title:'💬 @メンション: '+S.user?.name+'さんからメッセージ',
+          body:text,from:S.user?.id,fromName:S.user?.name,
+          to:'individual',toId:s.id,toName:s.name,
+          date:today(),readBy:[],progress:{[s.id]:'未対応'}});
+        DB.set('messages', msgs2);
+      }
+      // LINE通知（@メンションされた人だけ）
+      const lineId = getLineIdForStaff(s.id);
+      if(lineId){
+        const cfg = DB.getSettings();
+        if(cfg.lineWorkerUrl && cfg.lineToken){
+          const roomLabel = room==='all'?'全体':room==='A'?'浦和店':'広尾店';
+          fetch(cfg.lineWorkerUrl+'/notify', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({
+              token: cfg.lineToken,
+              lineUserId: lineId,
+              message: '💬 @メンション【'+roomLabel+'チャット】\n'+S.user?.name+'さんから:\n\n'+text
+            })
+          }).catch(function(){});
+        }
+      }
     });
   }
   DB.addChat(room, msg);
