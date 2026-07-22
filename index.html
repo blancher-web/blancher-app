@@ -296,6 +296,11 @@ textarea.form-input{resize:vertical;min-height:80px;}
         window._fbReady = true;
         if(typeof loadStaffList === 'function') STAFF_LIST = loadStaffList();
         if(typeof loadMenus === 'function') MENUS = loadMenus();
+        // Firebase読み込み後にセットアップ判定（PWA対応）
+        if(typeof isFirstRun === 'function' && typeof S !== 'undefined'){
+          if(isFirstRun() && S.page === 'loading') S.page = 'setup';
+          else if(!isFirstRun() && S.page === 'loading') S.page = 'login';
+        }
         if(typeof render === 'function' && window._appMounted){
           var page = (typeof S !== 'undefined') ? S.page : '';
           if(page !== 'chat') render();
@@ -863,7 +868,7 @@ const DB = {
 // STATE
 // ============================================================
 const S = {
-  page: 'login',
+  page: 'loading',
   pinInput: '',
   pendingUser: null,
   user: null,
@@ -952,7 +957,7 @@ function render(){
   try {
   const app = document.getElementById('app');
   // Firebaseが未接続でログイン後のページの場合はローディング表示
-  if(!window._fbReady && S.page !== 'login' && S.page !== 'pin'){
+  if(!window._fbReady || S.page === 'loading'){
     app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px"><div><img src="" id="loading-logo" style="height:60px;width:auto;border-radius:12px;display:none"><span id="loading-emoji" style="font-size:40px">💅</span></div><div style="font-size:15px;color:#999">Cura を起動中...</div><div style="width:40px;height:40px;border:4px solid #FCE4EC;border-top:4px solid var(--pink);border-radius:50%;animation:spin 1s linear infinite"></div><div id="loading-timeout-msg" style="font-size:12px;color:#bbb;display:none;text-align:center;padding:0 20px">接続に時間がかかっています...<br><button onclick="window._fbReady=true;render()" style="margin-top:8px;background:var(--pink);color:#fff;border:none;border-radius:20px;padding:8px 20px;cursor:pointer;font-size:13px">オフラインで続ける</button></div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
     applyLogo();
     // 4秒後に「オフラインで続ける」ボタンを表示
@@ -10482,11 +10487,11 @@ function reinstateStaff(id){
 // INIT
 // ============================================================
 window._appMounted = true;
-// 初回セットアップチェック
-if(isFirstRun()) { S.page = 'setup'; }
+// 初回セットアップはFirebase読み込み後に判定（PWA対応）
+// ※ Firebase読み込み前はローディング画面を表示
 render();
 
-// Firebase接続タイムアウト（8秒で強制的にローカルデータで起動）
+// Firebase接続タイムアウト（10秒で強制起動）
 setTimeout(function(){
   if(!window._fbReady){
     console.warn('Firebase接続タイムアウト - ローカルデータで起動します');
@@ -10494,8 +10499,10 @@ setTimeout(function(){
     window._fbCache = window._fbCache || {};
     STAFF_LIST = loadStaffList();
     MENUS = loadMenus();
+    // タイムアウト後にセットアップ判定
+    if(isFirstRun()) S.page = 'setup';
     if(window._appMounted) render();
   }
-}, 8000);</script>
+}, 10000);</script>
 </body>
 </html>
