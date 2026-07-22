@@ -7787,18 +7787,25 @@ function sendChat(room){
       // LINE通知（@メンションされた人だけ）
       var lineId = getLineIdForStaff(s.id);
       var cfg = DB.getSettings();
-      if(lineId && cfg.lineWorkerUrl && cfg.lineToken){
-        var roomLabel = room==='all'?'全体':room==='A'?'浦和店':'広尾店';
-        fetch(cfg.lineWorkerUrl+'/notify', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            token: cfg.lineToken,
-            lineUserId: lineId,
-            message: '💬 @メンション【'+roomLabel+'チャット】\n'+S.user?.name+'さんから:\n\n'+text
-          })
-        }).catch(function(){});
+      // デバッグ: 問題箇所を特定
+      if(!lineId){
+        console.warn('@mention LINE skip: no lineId for', s.name, s.id);
+        return;
       }
+      if(!cfg.lineWorkerUrl){ console.warn('@mention LINE skip: no workerUrl'); return; }
+      if(!cfg.lineToken){ console.warn('@mention LINE skip: no token'); return; }
+      var roomLabel = room==='all'?'全体':room==='A'?'浦和店':'広尾店';
+      fetch(cfg.lineWorkerUrl+'/notify', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          token: cfg.lineToken,
+          lineUserId: lineId,
+          message: '💬 @メンション【'+roomLabel+'チャット】\n'+S.user?.name+'さんから:\n\n'+text
+        })
+      }).then(function(r){
+        if(!r.ok) console.warn('@mention LINE error:', r.status);
+      }).catch(function(e){ console.warn('@mention LINE fetch error:', e.message); });
     });
   }
   DB.addChat(room, msg);
