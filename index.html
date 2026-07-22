@@ -960,8 +960,13 @@ function render(){
   const app = document.getElementById('app');
   // Firebaseが未接続でログイン後のページの場合はローディング表示
   if(!window._fbReady && S.page !== 'login' && S.page !== 'pin'){
-    app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px"><div><img src="" id="loading-logo" style="height:60px;width:auto;border-radius:12px;display:none"><span id="loading-emoji" style="font-size:40px">💅</span></div><div style="font-size:15px;color:#999">Cura を起動中...</div><div style="width:40px;height:40px;border:4px solid #FCE4EC;border-top:4px solid var(--pink);border-radius:50%;animation:spin 1s linear infinite"></div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+    app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:16px"><div><img src="" id="loading-logo" style="height:60px;width:auto;border-radius:12px;display:none"><span id="loading-emoji" style="font-size:40px">💅</span></div><div style="font-size:15px;color:#999">Cura を起動中...</div><div style="width:40px;height:40px;border:4px solid #FCE4EC;border-top:4px solid var(--pink);border-radius:50%;animation:spin 1s linear infinite"></div><div id="loading-timeout-msg" style="font-size:12px;color:#bbb;display:none;text-align:center;padding:0 20px">接続に時間がかかっています...<br><button onclick="window._fbReady=true;render()" style="margin-top:8px;background:var(--pink);color:#fff;border:none;border-radius:20px;padding:8px 20px;cursor:pointer;font-size:13px">オフラインで続ける</button></div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
     applyLogo();
+    // 4秒後に「オフラインで続ける」ボタンを表示
+    setTimeout(function(){
+      var msg = document.getElementById('loading-timeout-msg');
+      if(msg && !window._fbReady) msg.style.display='block';
+    }, 4000);
     return;
   }
   switch(S.page){
@@ -10436,6 +10441,18 @@ function reinstateStaff(id){
 window._appMounted = true;
 // 初回セットアップチェック
 if(isFirstRun()) { S.page = 'setup'; }
-render();</script>
+render();
+
+// Firebase接続タイムアウト（8秒で強制的にローカルデータで起動）
+setTimeout(function(){
+  if(!window._fbReady){
+    console.warn('Firebase接続タイムアウト - ローカルデータで起動します');
+    window._fbReady = true;
+    window._fbCache = window._fbCache || {};
+    STAFF_LIST = loadStaffList();
+    MENUS = loadMenus();
+    if(window._appMounted) render();
+  }
+}, 8000);</script>
 </body>
 </html>
